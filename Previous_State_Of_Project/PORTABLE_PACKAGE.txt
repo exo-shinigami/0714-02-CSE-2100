@@ -1,0 +1,40 @@
+==================================================
+  GAMBIT CHESS ENGINE - PORTABLE PACKAGE
+==================================================
+
+ARCHITECTURE: 32-bit (runs on both 32-bit and 64-bit Windows)
+
+TO RUN ON ANY WINDOWS MACHINE:
+-------------------------------
+1. Copy these files together to the target machine:
+   - gambit.exe
+   - SDL2.dll
+   - SDL2_ttf.dll
+
+2. Double-click gambit.exe to run
+
+3. No installation or setup required!
+
+
+VERIFIED COMPATIBLE FILES:
+---------------------------
+✓ gambit.exe     - PE32 (32-bit) executable
+✓ SDL2.dll       - PE32 (32-bit) library  
+✓ SDL2_ttf.dll   - PE32 (32-bit) library
+
+All files are 32-bit and will run on any Windows system 
+(Windows 7 and later, both 32-bit and 64-bit systems).
+
+
+TROUBLESHOOTING:
+----------------
+If you get error 0xc000007b:
+- All three files must be in the same folder
+- Make sure you copied the correct 32-bit DLLs
+- Try running as administrator
+
+If fonts don't load:
+- Make sure SDL2_ttf.dll is in the same folder as gambit.exe
+
+
+BUILD DATE: December 5, 2025

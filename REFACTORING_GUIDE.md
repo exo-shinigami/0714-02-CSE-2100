@@ -1983,5 +1983,3 @@ static int search_AlphaBeta(
 ---
 
 **Remember:** The goal isn't perfection on the first try. The goal is continuous improvement and learning to write maintainable, professional code. Each refactoring makes the codebase a little better, and each lesson learned makes you a better developer.
-
-Good luck with your refactoring journey! 🚀

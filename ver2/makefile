@@ -29,30 +29,30 @@ BIN_DIR = $(BUILD_DIR)/bin
 
 # Source files (core engine only, no GUI)
 SOURCES_CORE = \
-	$(SRC_MAIN)/gambit.c \
-	$(SRC_CORE_TYPES)/data.c \
-	$(SRC_CORE_BOARD)/board.c \
-	$(SRC_CORE_BOARD)/hashkeys.c \
-	$(SRC_CORE_BOARD)/validate.c \
-	$(SRC_CORE_MOVES)/movegen.c \
-	$(SRC_CORE_MOVES)/makemove.c \
-	$(SRC_CORE_MOVES)/io.c \
-	$(SRC_CORE_BITBOARDS)/bitboards.c \
-	$(SRC_CORE_ATTACK)/attack.c \
-	$(SRC_ENGINE_SEARCH)/search.c \
-	$(SRC_ENGINE_SEARCH)/perft.c \
-	$(SRC_ENGINE_EVAL)/evaluate.c \
-	$(SRC_ENGINE_HASH)/pvtable.c \
-	$(SRC_UI_PROTOCOLS)/uci.c \
-	$(SRC_UI_PROTOCOLS)/xboard.c \
-	$(SRC_UTILS)/misc.c \
-	$(SRC_UTILS)/init.c \
-	$(SRC_OPENINGBOOK)/polybook.c \
-	$(SRC_OPENINGBOOK)/polykeys.c
+	$(SRC_MAIN)/main_entry.c \
+	$(SRC_CORE_TYPES)/types_data.c \
+	$(SRC_CORE_BOARD)/board_representation.c \
+	$(SRC_CORE_BOARD)/board_hashkeys.c \
+	$(SRC_CORE_BOARD)/board_validate.c \
+	$(SRC_CORE_MOVES)/moves_generation.c \
+	$(SRC_CORE_MOVES)/moves_execution.c \
+	$(SRC_CORE_MOVES)/moves_io.c \
+	$(SRC_CORE_BITBOARDS)/bitboards_utils.c \
+	$(SRC_CORE_ATTACK)/attack_detection.c \
+	$(SRC_ENGINE_SEARCH)/search_algorithm.c \
+	$(SRC_ENGINE_SEARCH)/search_perft.c \
+	$(SRC_ENGINE_EVAL)/evaluation_static.c \
+	$(SRC_ENGINE_HASH)/hashtable_pv.c \
+	$(SRC_UI_PROTOCOLS)/protocols_uci.c \
+	$(SRC_UI_PROTOCOLS)/xboard_representation.c \
+	$(SRC_UTILS)/utils_misc.c \
+	$(SRC_UTILS)/utils_init.c \
+	$(SRC_OPENINGBOOK)/openingbook_poly.c \
+	$(SRC_OPENINGBOOK)/openingbook_keys.c
 
 # GUI source files (added to core for full build)
 SOURCES_GUI = \
-	$(SRC_UI_SDL)/gui.c
+	$(SRC_UI_SDL)/sdl_gui.c
 
 # All source files
 SOURCES = $(SOURCES_CORE) $(SOURCES_GUI)
@@ -65,25 +65,25 @@ TARGET = $(BIN_DIR)/gambit.exe
 
 # Default target - GUI version with SDL2 (statically linked)
 all: directories $(TARGET)
-	@copy "build\\bin\\gambit.exe" "gambit.exe" >nul
+	@cp $(TARGET) gambit.exe
 	@echo "Build complete! Double-click gambit.exe to play"
 
 # Create necessary directories
 directories:
-	@if not exist "$(OBJ_DIR)\$(SRC_MAIN)" mkdir "$(OBJ_DIR)\$(SRC_MAIN)"
-	@if not exist "$(OBJ_DIR)\$(SRC_CORE_TYPES)" mkdir "$(OBJ_DIR)\$(SRC_CORE_TYPES)"
-	@if not exist "$(OBJ_DIR)\$(SRC_CORE_BOARD)" mkdir "$(OBJ_DIR)\$(SRC_CORE_BOARD)"
-	@if not exist "$(OBJ_DIR)\$(SRC_CORE_MOVES)" mkdir "$(OBJ_DIR)\$(SRC_CORE_MOVES)"
-	@if not exist "$(OBJ_DIR)\$(SRC_CORE_BITBOARDS)" mkdir "$(OBJ_DIR)\$(SRC_CORE_BITBOARDS)"
-	@if not exist "$(OBJ_DIR)\$(SRC_CORE_ATTACK)" mkdir "$(OBJ_DIR)\$(SRC_CORE_ATTACK)"
-	@if not exist "$(OBJ_DIR)\$(SRC_ENGINE_SEARCH)" mkdir "$(OBJ_DIR)\$(SRC_ENGINE_SEARCH)"
-	@if not exist "$(OBJ_DIR)\$(SRC_ENGINE_EVAL)" mkdir "$(OBJ_DIR)\$(SRC_ENGINE_EVAL)"
-	@if not exist "$(OBJ_DIR)\$(SRC_ENGINE_HASH)" mkdir "$(OBJ_DIR)\$(SRC_ENGINE_HASH)"
-	@if not exist "$(OBJ_DIR)\$(SRC_UI_SDL)" mkdir "$(OBJ_DIR)\$(SRC_UI_SDL)"
-	@if not exist "$(OBJ_DIR)\$(SRC_UI_PROTOCOLS)" mkdir "$(OBJ_DIR)\$(SRC_UI_PROTOCOLS)"
-	@if not exist "$(OBJ_DIR)\$(SRC_UTILS)" mkdir "$(OBJ_DIR)\$(SRC_UTILS)"
-	@if not exist "$(OBJ_DIR)\$(SRC_OPENINGBOOK)" mkdir "$(OBJ_DIR)\$(SRC_OPENINGBOOK)"
-	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
+	@mkdir -p $(OBJ_DIR)/$(SRC_MAIN)
+	@mkdir -p $(OBJ_DIR)/$(SRC_CORE_TYPES)
+	@mkdir -p $(OBJ_DIR)/$(SRC_CORE_BOARD)
+	@mkdir -p $(OBJ_DIR)/$(SRC_CORE_MOVES)
+	@mkdir -p $(OBJ_DIR)/$(SRC_CORE_BITBOARDS)
+	@mkdir -p $(OBJ_DIR)/$(SRC_CORE_ATTACK)
+	@mkdir -p $(OBJ_DIR)/$(SRC_ENGINE_SEARCH)
+	@mkdir -p $(OBJ_DIR)/$(SRC_ENGINE_EVAL)
+	@mkdir -p $(OBJ_DIR)/$(SRC_ENGINE_HASH)
+	@mkdir -p $(OBJ_DIR)/$(SRC_UI_SDL)
+	@mkdir -p $(OBJ_DIR)/$(SRC_UI_PROTOCOLS)
+	@mkdir -p $(OBJ_DIR)/$(SRC_UTILS)
+	@mkdir -p $(OBJ_DIR)/$(SRC_OPENINGBOOK)
+	@mkdir -p $(BIN_DIR)
 
 # Link object files to create executable
 $(TARGET): $(OBJECTS)
@@ -91,19 +91,19 @@ $(TARGET): $(OBJECTS)
 
 # Compile core source files to object files
 $(OBJ_DIR)/%.o: %.c
-	@if not exist "$(@D)" mkdir "$(@D)"
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile GUI source files with SDL2 flags
 $(OBJ_DIR)/$(SRC_UI_SDL)/%.o: $(SRC_UI_SDL)/%.c
-	@if not exist "$(@D)" mkdir "$(@D)"
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS_GUI) -c $< -o $@
 
 # Clean build artifacts
 clean:
-	@if exist "$(BUILD_DIR)" rd /s /q "$(BUILD_DIR)"
-	@if exist "*.o" del /q *.o
-	@if exist "gambit.exe" del /q gambit.exe
+	@rm -rf "$(BUILD_DIR)"
+	@rm -f *.o
+	@rm -f gambit.exe
 	@echo "Clean complete"
 
 # Clean and rebuild

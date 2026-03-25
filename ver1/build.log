@@ -1,0 +1,3 @@
+gcc xboard.c gambit.c uci.c evaluate.c pvtable.c init.c bitboards.c hashkeys.c board.c data.c attack.c io.c movegen.c validate.c makemove.c perft.c search.c misc.c polybook.c polykeys.c gui.c -o gambit -O2 -mwindows -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
+Copying required DLL files...
+Build complete! gambit.exe and required DLLs are ready.

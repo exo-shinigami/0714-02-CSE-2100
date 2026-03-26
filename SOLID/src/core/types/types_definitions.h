@@ -15,6 +15,9 @@
 
 #include <cstdlib>
 #include <cstdio>
+#include <vector>
+
+#include "../board/board_query_interface.h"
 
 // #define DEBUG
 
@@ -105,12 +108,12 @@ enum { HFNONE, HFALPHA, HFBETA, HFEXACT };
  * UTILITY MACROS
  * ===========================================================================
  */
-#define FILE_RANK_TO_SQUARE(f,r)  ( (21 + (f)) + ((r) * 10) )
+#define fILERANKTOSQUARE(f,r)  ( (21 + (f)) + ((r) * 10) )
 #define SQUARE_120_TO_64(sq120)   (g_square120To64[(sq120)])
 #define SQUARE_64_TO_120(sq64)    (g_square64To120[(sq64)])
 
-#define BITBOARD_POP(b)           Bitboard_PopBit(b)
-#define BITBOARD_COUNT(b)         Bitboard_CountBits(b)
+#define BITBOARD_POP(b)           bitboardPopBit(b)
+#define BITBOARD_COUNT(b)         bitboardCountBits(b)
 #define BITBOARD_CLEAR_BIT(bb,sq) ((bb) &= g_bitClearMask[(sq)])
 #define BITBOARD_SET_BIT(bb,sq)   ((bb) |= g_bitSetMask[(sq)])
 
@@ -118,7 +121,7 @@ enum { HFNONE, HFALPHA, HFBETA, HFEXACT };
 #define PIECE_IS_ROOK_QUEEN(p)    (g_pieceRookQueen[(p)])
 #define PIECE_IS_KNIGHT(p)        (g_pieceKnight[(p)])
 #define PIECE_IS_KING(p)          (g_pieceKing[(p)])
-#define SQUARE_MIRROR_64(sq)      (Mirror64[(sq)])
+#define SQUARE_MIRROR_64(sq)      (mirror64[(sq)])
 
 /* ===========================================================================
  * GLOBAL LOOKUP TABLES
@@ -131,13 +134,13 @@ extern U64  g_bitClearMask[64];
 extern U64  g_pieceKeys[13][120];
 extern U64  g_sideKey;
 extern U64  g_castleKeys[16];
-extern char PceChar[];
-extern char SideChar[];
-extern char RankChar[];
-extern char FileChar[];
-extern int  PieceBig[13];
-extern int  PieceMaj[13];
-extern int  PieceMin[13];
+extern char pceChar[];
+extern char sideChar[];
+extern char rankChar[];
+extern char fileChar[];
+extern int  pieceBig[13];
+extern int  pieceMaj[13];
+extern int  pieceMin[13];
 extern int  g_pieceVal[13];
 extern int  g_pieceCol[13];
 extern int  g_piecePawn[13];
@@ -148,7 +151,7 @@ extern int  g_pieceKing[13];
 extern int  g_pieceRookQueen[13];
 extern int  g_pieceBishopQueen[13];
 extern int  g_pieceSlides[13];
-extern int  Mirror64[64];
+extern int  mirror64[64];
 extern U64  g_fileBBMask[8];
 extern U64  g_rankBBMask[8];
 extern U64  g_blackPassedMask[64];
@@ -159,9 +162,9 @@ extern U64  g_isolatedMask[64];
  * BITBOARD UTILITIES (bitboards_utils.cpp)
  * ===========================================================================
  */
-extern void Bitboard_Print(U64 bb);
-extern int  Bitboard_PopBit(U64 *bb);
-extern int  Bitboard_CountBits(U64 b);
+extern void bitboardPrint(U64 bb);
+extern int  bitboardPopBit(U64 *bb);
+extern int  bitboardCountBits(U64 b);
 
 /* ===========================================================================
  * FORWARD DECLARATIONS
@@ -183,17 +186,17 @@ public:
 };
 
 /* ===========================================================================
- * CLASS: Move
+ * CLASS: move
  * Represents a single move with its move-ordering score.
  * All data is private; access via typed API.
  * ===========================================================================
  */
-class Move {
+class move {
     int move_  = NOMOVE;
     int score_ = 0;
 public:
-    Move() = default;
-    Move(int m, int s = 0) : move_(m), score_(s) {}
+    move() = default;
+    move(int m, int s = 0) : move_(m), score_(s) {}
 
     // Raw integer encoding and score
     int  raw()         const { return move_; }
@@ -220,7 +223,7 @@ public:
  * ===========================================================================
  */
 class MoveList {
-    Move moves_[CHESS_MAX_POSITION_MOVES];
+    move moves_[CHESS_MAX_POSITION_MOVES];
     int  count_ = 0;
 public:
     MoveList() : count_(0) {}
@@ -229,14 +232,14 @@ public:
     void print()  const;
 
     // Add a new move with a score
-    void push(int move, int score = 0) {
-        moves_[count_] = Move(move, score);
+    void push(int moveValue, int score = 0) {
+        moves_[count_] = move(moveValue, score);
         ++count_;
     }
 
     int         size()       const { return count_; }
-    Move&       at(int i)          { return moves_[i]; }
-    const Move& at(int i)    const { return moves_[i]; }
+    move&       at(int i)          { return moves_[i]; }
+    const move& at(int i)    const { return moves_[i]; }
 };
 
 /* ===========================================================================
@@ -261,7 +264,7 @@ public:
  * ===========================================================================
  */
 class HashTable {
-    HashEntry *pTable     = nullptr;
+    std::vector<HashEntry> table_;
     int        numEntries = 0;
     int        newWrite   = 0;
     int        overWrite  = 0;
@@ -269,12 +272,12 @@ class HashTable {
     int        cut        = 0;
 public:
     HashTable() = default;
-    ~HashTable() { free(pTable); pTable = nullptr; }
+    ~HashTable() = default;
     // Non-copyable (owns heap memory)
     HashTable(const HashTable&)            = delete;
     HashTable& operator=(const HashTable&) = delete;
 
-    void init(int MB);
+    void init(int mB);
     void clear();
     void clearStats()   { overWrite = hit = cut = 0; }
     void incrementCut() { ++cut; }
@@ -304,21 +307,16 @@ public:
  * Complete board state with all board-level operations as member functions.
  * ===========================================================================
  */
-class ChessBoard {
+class ChessBoard : public IBoardQuery, public IBoardModifier, public IBoardSetup {
 public:
+    // History
+    UndoMove  history[CHESS_MAX_GAME_MOVES];
+
+private:
     // Board data
     int       pieces[CHESS_BOARD_SQUARE_NUM];
-    U64       pawns[3];
-    int       KingSq[2];
 
-    // Game state
-    int       side;
-    int       enPas;
-    int       fiftyMove;
-    int       ply;
-    int       hisPly;
-    int       castlePerm;
-    U64       posKey;
+    U64       pawns[3];
 
     // Derived piece counts
     int       pieceCount[13];
@@ -327,31 +325,110 @@ public:
     int       minPce[2];
     int       material[2];
 
-    // History
-    UndoMove  history[CHESS_MAX_GAME_MOVES];
     int       pList[13][10];
+
+    // Game state internals (encapsulated through getters/setters)
+    int       kingSq[2];
+    int       side;
+    int       enPas;
+    int       fiftyMove;
+    int       ply;
+    int       hisPly;
+    int       castlePerm;
+    U64       posKey;
+
     HashTable hashTable;
+
+public:
 
     // Constructor — initialises to empty board
     ChessBoard();
 
     // Board management
-    void  reset();
-    int   parseFromFEN(const char *fen);
-    void  print() const;
-    void  updateListsMaterial();
+    void  reset() override;
+    int   parseFromFEN(const char *fen) override;
+    void  print() const override;
+    void  updateListsMaterial() override;
     int   check() const;
-    void  mirror();
+    void  mirror() override;
     U64   generatePositionKey() const;
 
-    // Move execution
-    int   makeMove(int move);
-    void  takeMove();
-    void  makeNullMove();
-    void  takeNullMove();
+    // move execution
+    int   makeMove(int move) override;
+    void  takeMove() override;
+    void  makeNullMove() override;
+    void  takeNullMove() override;
+    int   hasAnyLegalMove() override;
+
+    // Hash table operations (encapsulation layer)
+    void initHashTable(int mB) { hashTable.init(mB); }
+    void clearHashTable() { hashTable.clear(); }
+    void clearHashStats() { hashTable.clearStats(); }
+    int probeHashEntry(int *move, int *score, int alpha, int beta, int depth) {
+        return hashTable.probeEntry(this, move, score, alpha, beta, depth);
+    }
+    void incrementHashCut() { hashTable.incrementCut(); }
+    void storeHashEntry(int move, int score, int flags, int depth) {
+        hashTable.storeEntry(this, move, score, flags, depth);
+    }
+    int getPvLine(int depth, SearchInfo *info) {
+        return hashTable.getPvLine(depth, this, info);
+    }
 
     // Attack query
-    int   isSquareAttacked(int sq, int side) const;
+    int   isSquareAttacked(int sq, int side) const override;
+
+    // Read-only query helpers for incremental encapsulation
+    int getPieceAt(int square) const override { return pieces[square]; }
+    int& pieceAt(int square) { return pieces[square]; }
+    int pieceAt(int square) const { return pieces[square]; }
+    int getPieceCount(int piece) const { return pieceCount[piece]; }
+    int& pieceCountAt(int piece) { return pieceCount[piece]; }
+    int pieceCountAt(int piece) const { return pieceCount[piece]; }
+    int getPieceSquare(int piece, int index) const override { return pList[piece][index]; }
+    int& pieceListAt(int piece, int index) { return pList[piece][index]; }
+    int pieceListAt(int piece, int index) const { return pList[piece][index]; }
+    int getBigPieceCount(int color) const { return bigPce[color]; }
+    int& bigPieceCountAt(int color) { return bigPce[color]; }
+    int bigPieceCountAt(int color) const { return bigPce[color]; }
+    U64 getPawns(int color) const override { return pawns[color]; }
+    U64& pawnsAt(int color) { return pawns[color]; }
+    U64 pawnsAt(int color) const { return pawns[color]; }
+    int getMaterial(int color) const override { return material[color]; }
+    int& materialAt(int color) { return material[color]; }
+    int materialAt(int color) const { return material[color]; }
+    int& majorPieceCountAt(int color) { return majPce[color]; }
+    int majorPieceCountAt(int color) const { return majPce[color]; }
+    int& minorPieceCountAt(int color) { return minPce[color]; }
+    int minorPieceCountAt(int color) const { return minPce[color]; }
+    int getSide() const override { return side; }
+    void setSide(int value) { side = value; }
+    void toggleSide() { side ^= 1; }
+    int getEnPassantSquare() const override { return enPas; }
+    void setEnPassantSquare(int value) { enPas = value; }
+    int getCastlePermission() const override { return castlePerm; }
+    void setCastlePermission(int value) { castlePerm = value; }
+    void andCastlePermission(int mask) { castlePerm &= mask; }
+    void orCastlePermission(int mask) { castlePerm |= mask; }
+    int getFiftyMoveCounter() const override { return fiftyMove; }
+    void setFiftyMoveCounter(int value) { fiftyMove = value; }
+    void incrementFiftyMoveCounter() { ++fiftyMove; }
+    int getPly() const { return ply; }
+    void setPly(int plyValue) { ply = plyValue; }
+    void incrementPly() { ++ply; }
+    void decrementPly() { --ply; }
+    int getKingSquare(int color) const override { return kingSq[color]; }
+    void setKingSquare(int color, int square) { kingSq[color] = square; }
+    U64 getPositionKey() const override { return posKey; }
+    void setPositionKey(U64 value) { posKey = value; }
+    void xorPositionKey(U64 value) { posKey ^= value; }
+    int getHistoryPly() const override { return hisPly; }
+    void setHistoryPly(int value) { hisPly = value; }
+    void incrementHistoryPly() { ++hisPly; }
+    void decrementHistoryPly() { --hisPly; }
+    U64 getHistoryPositionKey(int index) const override { return history[index].posKey; }
+    int isInCheck(int color) const override { return isSquareAttacked(kingSq[color], color ^ 1); }
+    int isValid() const override { return check(); }
 };
 
 /* ===========================================================================
@@ -373,11 +450,11 @@ public:
     float fh            = 0.0f;
     float fhf           = 0.0f;
     int   nullCut       = 0;
-    int   GAME_MODE     = MODE_TYPE_UCI;
-    int   POST_THINKING = BOOL_TYPE_FALSE;
+    int   gameMode     = MODE_TYPE_UCI;
+    int   postThinking = BOOL_TYPE_FALSE;
 
     // Search-auxiliary tables (SRP: moved from ChessBoard — search data belongs here)
-    int   PvArray[CHESS_MAX_SEARCH_DEPTH]              = {};
+    int   pvArray[CHESS_MAX_SEARCH_DEPTH]              = {};
     int   searchHistory[13][CHESS_BOARD_SQUARE_NUM]    = {};
     int   searchKillers[2][CHESS_MAX_SEARCH_DEPTH]     = {};
 
@@ -390,6 +467,28 @@ public:
         for (int i = 0; i < 2; ++i)
             for (int j = 0; j < CHESS_MAX_SEARCH_DEPTH; ++j)
                 searchKillers[i][j] = 0;
+    }
+
+    void setPvMove(int index, int moveValue) {
+        ASSERT(index >= 0 && index < CHESS_MAX_SEARCH_DEPTH);
+        pvArray[index] = moveValue;
+    }
+
+    int getPvMove(int index) const {
+        ASSERT(index >= 0 && index < CHESS_MAX_SEARCH_DEPTH);
+        return pvArray[index];
+    }
+
+    void storeKillerMove(int ply, int moveValue) {
+        ASSERT(ply >= 0 && ply < CHESS_MAX_SEARCH_DEPTH);
+        searchKillers[1][ply] = searchKillers[0][ply];
+        searchKillers[0][ply] = moveValue;
+    }
+
+    void addHistoryScore(int piece, int toSquare, int depthValue) {
+        ASSERT(piece >= 0 && piece < 13);
+        ASSERT(toSquare >= 0 && toSquare < CHESS_BOARD_SQUARE_NUM);
+        searchHistory[piece][toSquare] += depthValue;
     }
 };
 
@@ -447,92 +546,167 @@ public:
 };
 
 /* ===========================================================================
+ * CLASS: GameRulesService
+ * Encapsulates terminal-state and draw-rule checks used by UIs/protocols.
+ * ===========================================================================
+ */
+class GameRulesService {
+public:
+    static int repetitionCount(const IBoardQuery& board);
+    static int isDrawByMaterial(const IBoardQuery& board);
+    static int evaluateTerminalState(IBoardQuery& queryBoard, IBoardModifier& mutableBoard);
+};
+
+/* ===========================================================================
+ * CLASS: PerftRunner
+ * OOD wrapper for perft tree traversal and reporting.
+ * ===========================================================================
+ */
+class PerftRunner {
+    ChessBoard* board_ = nullptr;
+    long leafNodes_ = 0;
+
+    void runRecursive(int depth);
+public:
+    explicit PerftRunner(ChessBoard& board) : board_(&board) {}
+
+    long run(int depth);
+    void test(int depth);
+};
+
+/* ===========================================================================
+ * CLASS: ValidationService
+ * Encapsulates board and move-list validation/debug checks.
+ * ===========================================================================
+ */
+class ValidationService {
+public:
+    static int isMoveListValid(const MoveList& list, const ChessBoard& board);
+    static int isSquare120(int squareIndex);
+    static int isPieceValidEmptyOrOffboard(int piece);
+    static int isSquareOnBoard(int squareIndex);
+    static int isSideValid(int side);
+    static int isFileRankValid(int fileOrRank);
+    static int isPieceValidEmpty(int piece);
+    static int isPieceValid(int piece);
+    static void runAnalysisTest(ChessBoard& board, SearchInfo& info, const IEvaluator& eval);
+    static void runMirrorEvalTest(ChessBoard& board);
+};
+
+/* ===========================================================================
+ * CLASS: EngineBootstrapService
+ * Single initialization entry point for tables, masks, and hashing seeds.
+ * ===========================================================================
+ */
+class EngineBootstrapService {
+public:
+    static void initEvalMasks();
+    static void initFilesRanksBoard();
+    static void initHashKeys();
+    static void initBitMasks();
+    static void initSquare120To64();
+    static void initAll();
+};
+
+/* ===========================================================================
+ * CLASS: RuntimeIOService
+ * Encapsulates platform-dependent clock/input handling for search loops.
+ * ===========================================================================
+ */
+class RuntimeIOService {
+public:
+    static int getTimeMs();
+    static int isInputWaiting();
+    static void readInput(SearchInfo& info);
+};
+
+/* ===========================================================================
  * VALIDATION FREE FUNCTIONS (board_validate.cpp)
  * ===========================================================================
  */
-extern int  SqOnBoard(int sq);
-extern int  SideValid(int side);
-extern int  FileRankValid(int fr);
-extern int  PieceValidEmpty(int piece);
-extern int  PieceValid(int piece);
-extern int  SqIs120(int sq);
-extern int  PceValidEmptyOffbrd(int piece);
-extern int  MoveListOk(const MoveList *list, const ChessBoard *board);
-extern void DebugAnalysisTest(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
-extern void MirrorEvalTest(ChessBoard *board);
+extern int  sqOnBoard(int sq);
+extern int  sideValid(int side);
+extern int  fileRankValid(int fr);
+extern int  pieceValidEmpty(int piece);
+extern int  pieceValid(int piece);
+extern int  sqIs120(int sq);
+extern int  pceValidEmptyOffbrd(int piece);
+extern int  moveListOk(const MoveList *list, const ChessBoard *board);
+extern void debugAnalysisTest(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
+extern void mirrorEvalTest(ChessBoard *board);
 
 /* ===========================================================================
  * MOVE GENERATION FREE FUNCTIONS (moves_generation.cpp)
  * ===========================================================================
  */
-extern void Move_GenerateAll(const ChessBoard *board, MoveList *list, const SearchInfo *info = nullptr);
-extern void GenerateAllCaps(const ChessBoard *board, MoveList *list, const SearchInfo *info = nullptr);
-extern int  MoveExists(ChessBoard *board, int move);
-extern void Init_MvvLva();
+extern void moveGenerateAll(const ChessBoard *board, MoveList *list, const SearchInfo *info = nullptr);
+extern void generateAllCaps(const ChessBoard *board, MoveList *list, const SearchInfo *info = nullptr);
+extern int  moveExists(ChessBoard *board, int move);
+extern void initMvvLva();
 
 /* ===========================================================================
  * MOVE I/O FREE FUNCTIONS (moves_io.cpp)
  * ===========================================================================
  */
-extern char *PrMove(int move);
-extern char *PrSq(int sq);
-extern void  PrintMoveList(const MoveList *list);
-extern int   Move_Parse(const char *ptrChar, ChessBoard *board);
+extern char *prMove(int move);
+extern char *prSq(int sq);
+extern void  printMoveList(const MoveList *list);
+extern int   moveParse(const char *ptrChar, ChessBoard *board);
 
 /* ===========================================================================
  * SEARCH FREE FUNCTIONS (search_algorithm.cpp)
  * ===========================================================================
  */
-extern void Search_Position(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
-extern int  Search_GetBestMove(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
+extern void searchPosition(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
+extern int  searchGetBestMove(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
 
 /* ===========================================================================
- * PERFT (search_perft.cpp)
+ * pERFT (search_perft.cpp)
  * ===========================================================================
  */
-extern void Search_PerftTest(int depth, ChessBoard *board);
+extern void searchPerftTest(int depth, ChessBoard *board);
 
 /* ===========================================================================
- * EVALUATION (evaluation_static.cpp)
+ * eVALUATION (evaluation_static.cpp)
  * ===========================================================================
  */
-extern int Evaluate_Position(const ChessBoard *board);
+extern int evaluatePosition(const IBoardQuery *board);
 
 /* ===========================================================================
  * MISC UTILITIES (utils_misc.cpp)
  * ===========================================================================
  */
-extern int  Misc_GetTimeMs();
-extern void Misc_ReadInput(SearchInfo *info);
+extern int  miscGetTimeMs();
+extern void miscReadInput(SearchInfo *info);
 
 /* ===========================================================================
- * INITIALIZATION (utils_init.cpp)
+ * iNITIALIZATION (utils_init.cpp)
  * ===========================================================================
  */
-extern void Init_All();
+extern void initAll();
 
 /* ===========================================================================
  * OPENING BOOK (openingbook_poly.cpp)
  * ===========================================================================
  */
-extern int  PolyBook_GetMove(ChessBoard *board);
-extern void PolyBook_Clean();
-extern void PolyBook_Init();
+extern int  polyBookGetMove(ChessBoard *board);
+extern void polyBookClean();
+extern void polyBookInit();
 
 /* ===========================================================================
  * PROTOCOL LOOPS
  * ===========================================================================
  */
-extern void Uci_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
-extern void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
-extern void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
+extern void uciLoop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
+extern void xBoardLoop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
+extern void consoleLoop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval);
 
 /* ===========================================================================
- * GAME STATE HELPERS (protocols_xboard.cpp)
+ * GAME STATE HELPERS (core/board/game_rules.cpp)
  * ===========================================================================
  */
 extern int checkresult(ChessBoard *board);
-extern int DrawMaterial(const ChessBoard *board);
-extern int ThreeFoldRep(const ChessBoard *board);
+extern int drawMaterial(const IBoardQuery *board);
+extern int threeFoldRep(const IBoardQuery *board);
 
 #endif // DEFS_H

@@ -27,7 +27,7 @@
 #define INPUTBUFFER 400 * 6
 
 // go depth 6 wtime 180000 btime 100000 binc 1000 winc 1000 movetime 1000 movestogo 40
-void ParseGo(char* line, SearchInfo *info, ChessBoard *board, const IEvaluator& eval) {
+void parseGo(char* line, SearchInfo *info, ChessBoard *board, const IEvaluator& eval) {
 
 	int depth = -1, movestogo = 30,movetime = -1;
 	int time = -1, inc = 0;
@@ -38,19 +38,19 @@ void ParseGo(char* line, SearchInfo *info, ChessBoard *board, const IEvaluator& 
 		;
 	}
 
-	if ((pointer = strstr(line,"binc")) && board->side == COLOR_TYPE_BLACK) {
+	if ((pointer = strstr(line,"binc")) && board->getSide() == COLOR_TYPE_BLACK) {
 		inc = atoi(pointer + 5);
 	}
 
-	if ((pointer = strstr(line,"winc")) && board->side == COLOR_TYPE_WHITE) {
+	if ((pointer = strstr(line,"winc")) && board->getSide() == COLOR_TYPE_WHITE) {
 		inc = atoi(pointer + 5);
 	}
 
-	if ((pointer = strstr(line,"wtime")) && board->side == COLOR_TYPE_WHITE) {
+	if ((pointer = strstr(line,"wtime")) && board->getSide() == COLOR_TYPE_WHITE) {
 		time = atoi(pointer + 6);
 	}
 
-	if ((pointer = strstr(line,"btime")) && board->side == COLOR_TYPE_BLACK) {
+	if ((pointer = strstr(line,"btime")) && board->getSide() == COLOR_TYPE_BLACK) {
 		time = atoi(pointer + 6);
 	}
 
@@ -71,7 +71,7 @@ void ParseGo(char* line, SearchInfo *info, ChessBoard *board, const IEvaluator& 
 		movestogo = 1;
 	}
 
-	info->starttime = Misc_GetTimeMs();
+	info->starttime = miscGetTimeMs();
 	info->depth = depth;
 
 	if(time != -1) {
@@ -87,13 +87,13 @@ void ParseGo(char* line, SearchInfo *info, ChessBoard *board, const IEvaluator& 
 
 	printf("time:%d start:%d stop:%d depth:%d timeset:%d\n",
 		time,info->starttime,info->stoptime,info->depth,info->timeset);
-	Search_Position(board, info, eval);
+	searchPosition(board, info, eval);
 }
 
 // position fen fenstr
 // position startpos
 // ... moves e2e4 e7e5 b7b8q
-void ParsePosition(const char* lineIn, ChessBoard *board) {
+void parsePosition(const char* lineIn, ChessBoard *board) {
 
 	lineIn += 9;
     const char *ptrChar = lineIn;
@@ -116,10 +116,10 @@ void ParsePosition(const char* lineIn, ChessBoard *board) {
 	if(ptrChar != NULL) {
         ptrChar += 6;
         while(*ptrChar) {
-              move = Move_Parse(ptrChar,board);
+              move = moveParse(ptrChar,board);
 			  if(move == NOMOVE) break;
 			  board->makeMove(move);
-              board->ply=0;
+			  board->setPly(0);
               while(*ptrChar && *ptrChar!= ' ') ptrChar++;
               ptrChar++;
         }
@@ -127,9 +127,9 @@ void ParsePosition(const char* lineIn, ChessBoard *board) {
 	board->print();
 }
 
-void Uci_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+void uciLoop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
-	info->GAME_MODE = MODE_TYPE_UCI;
+	info->gameMode = MODE_TYPE_UCI;
 
 	setbuf(stdin, NULL);
     setbuf(stdout, NULL);
@@ -141,7 +141,7 @@ void Uci_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 	printf("option name Book type check default true\n");
     printf("uciok\n");
 	
-	int MB = 64;
+	int mB = 64;
 
 	while (BOOL_TYPE_TRUE) {
 		memset(&line[0], 0, sizeof(line));
@@ -156,12 +156,12 @@ void Uci_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
             printf("readyok\n");
             continue;
         } else if (!strncmp(line, "position", 8)) {
-            ParsePosition(line, board);
+            parsePosition(line, board);
         } else if (!strncmp(line, "ucinewgame", 10)) {
-            ParsePosition("position startpos\n", board);
+            parsePosition("position startpos\n", board);
         } else if (!strncmp(line, "go", 2)) {
             printf("Seen Go..\n");
-            ParseGo(line, info, board, eval);
+            parseGo(line, info, board, eval);
         } else if (!strncmp(line, "quit", 4)) {
             info->quit = BOOL_TYPE_TRUE;
             break;
@@ -170,14 +170,14 @@ void Uci_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
             printf("id author Bluefever\n");
             printf("uciok\n");
         } else if (!strncmp(line, "debug", 4)) {
-            DebugAnalysisTest(board, info, eval);
+            debugAnalysisTest(board, info, eval);
             break;
         } else if (!strncmp(line, "setoption name Hash value ", 26)) {			
-			sscanf(line,"%*s %*s %*s %*s %d",&MB);
-			if(MB < 4) MB = 4;
-			if(MB > CHESS_MAX_HASH) MB = CHESS_MAX_HASH;
-			printf("Set Hash to %d MB\n",MB);
-			board->hashTable.init(MB);
+			sscanf(line,"%*s %*s %*s %*s %d",&mB);
+			if(mB < 4) mB = 4;
+			if(mB > CHESS_MAX_HASH) mB = CHESS_MAX_HASH;
+			printf("Set Hash to %d mB\n",mB);
+			board->initHashTable(mB);
 		} else if (!strncmp(line, "setoption name Book value ", 26)) {			
 			char *ptrTrue = NULL;
 			ptrTrue = strstr(line, "true");
@@ -192,7 +192,7 @@ void Uci_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 }
 
 void UciProtocol::run(ChessBoard& board, SearchInfo& info, const IEvaluator& eval) {
-	Uci_Loop(&board, &info, eval);
+	uciLoop(&board, &info, eval);
 }
 
 

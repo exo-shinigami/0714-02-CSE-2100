@@ -24,7 +24,7 @@ GameTimer::GameTimer(int initialTimeMs, int incrementMs)
 void GameTimer::start() {
     isActive_ = true;
     isPaused_ = false;
-    lastMoveTime_ = Misc_GetTimeMs();
+    lastMoveTime_ = miscGetTimeMs();
 }
 
 void GameTimer::pause() {
@@ -36,7 +36,7 @@ void GameTimer::pause() {
 void GameTimer::resume() {
     if (isActive_ && isPaused_) {
         isPaused_ = false;
-        lastMoveTime_ = Misc_GetTimeMs();
+        lastMoveTime_ = miscGetTimeMs();
     }
 }
 
@@ -54,7 +54,7 @@ void GameTimer::update(int currentSide) {
         return;
     }
     
-    int currentTime = Misc_GetTimeMs();
+    int currentTime = miscGetTimeMs();
     int elapsed = currentTime - lastMoveTime_;
     lastMoveTime_ = currentTime;
     

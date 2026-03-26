@@ -18,7 +18,7 @@
 #include <SDL2/SDL_ttf.h>
 
 /**
- * @class GUIRenderer
+ * @class gUIRenderer
  * @brief Responsible only for rendering the chess GUI
  * 
  * SOLID Principles Applied:
@@ -26,7 +26,7 @@
  * - OCP: Can extend rendering without modifying core logic
  * - DIP: Depends on ChessBoard abstraction, not internal implementation
  */
-class GUIRenderer {
+class gUIRenderer {
 private:
     SDL_Renderer* renderer_;
     SDL_Texture* pieceTextures_[13];
@@ -37,12 +37,12 @@ private:
     SDL_Texture* createPieceTexture(int piece);
     
 public:
-    explicit GUIRenderer(SDL_Renderer* renderer);
-    ~GUIRenderer();
+    explicit gUIRenderer(SDL_Renderer* renderer);
+    ~gUIRenderer();
     
     // Non-copyable
-    GUIRenderer(const GUIRenderer&) = delete;
-    GUIRenderer& operator=(const GUIRenderer&) = delete;
+    gUIRenderer(const gUIRenderer&) = delete;
+    gUIRenderer& operator=(const gUIRenderer&) = delete;
     
     // Core rendering methods
     void renderBoard(const ChessBoard& board, int selectedSquare,

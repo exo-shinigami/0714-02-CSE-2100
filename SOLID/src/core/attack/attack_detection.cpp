@@ -5,7 +5,7 @@
  * Determines if a given square is under attack by pieces of a specific color.
  * This is crucial for:
  * - Check detection
- * - Move legality validation
+ * - move legality validation
  * - Castling rights verification
  * - King safety evaluation
  * 
@@ -30,25 +30,25 @@ int ChessBoard::isSquareAttacked(const int squareIndex, const int side) const {
 	
 	int piece,index,t_sq,direction;
 	
-	ASSERT(SqOnBoard(squareIndex));
-	ASSERT(SideValid(side));
+	ASSERT(sqOnBoard(squareIndex));
+	ASSERT(sideValid(side));
 	ASSERT(board->check());
 	
 	// pawns
 	if(side == COLOR_TYPE_WHITE) {
-		if(board->pieces[squareIndex-11] == PIECE_TYPE_WHITE_PAWN || board->pieces[squareIndex-9] == PIECE_TYPE_WHITE_PAWN) {
+		if(board->pieceAt(squareIndex-11) == PIECE_TYPE_WHITE_PAWN || board->pieceAt(squareIndex-9) == PIECE_TYPE_WHITE_PAWN) {
 			return BOOL_TYPE_TRUE;
 		}
 	} else {
-		if(board->pieces[squareIndex+11] == PIECE_TYPE_BLACK_PAWN || board->pieces[squareIndex+9] == PIECE_TYPE_BLACK_PAWN) {
+		if(board->pieceAt(squareIndex+11) == PIECE_TYPE_BLACK_PAWN || board->pieceAt(squareIndex+9) == PIECE_TYPE_BLACK_PAWN) {
 			return BOOL_TYPE_TRUE;
 		}	
 	}
 	
 	// knights
 	for(index = 0; index < 8; ++index) {		
-		piece = board->pieces[squareIndex + KnDir[index]];
-		ASSERT(PceValidEmptyOffbrd(piece));
+		piece = board->pieceAt(squareIndex + KnDir[index]);
+		ASSERT(pceValidEmptyOffbrd(piece));
 		if(piece != OFFBOARD && PIECE_IS_KNIGHT(piece) && g_pieceCol[piece]==side) {
 			return BOOL_TYPE_TRUE;
 		}
@@ -58,9 +58,9 @@ int ChessBoard::isSquareAttacked(const int squareIndex, const int side) const {
 	for(index = 0; index < 4; ++index) {		
 		direction = RkDir[index];
 		t_sq = squareIndex + direction;
-		ASSERT(SqIs120(t_sq));
-		piece = board->pieces[t_sq];
-		ASSERT(PceValidEmptyOffbrd(piece));
+		ASSERT(sqIs120(t_sq));
+		piece = board->pieceAt(t_sq);
+		ASSERT(pceValidEmptyOffbrd(piece));
 		while(piece != OFFBOARD) {
 			if(piece != EMPTY) {
 				if(PIECE_IS_ROOK_QUEEN(piece) && g_pieceCol[piece] == side) {
@@ -69,8 +69,8 @@ int ChessBoard::isSquareAttacked(const int squareIndex, const int side) const {
 				break;
 			}
 			t_sq += direction;
-			ASSERT(SqIs120(t_sq));
-			piece = board->pieces[t_sq];
+			ASSERT(sqIs120(t_sq));
+			piece = board->pieceAt(t_sq);
 		}
 	}
 	
@@ -78,9 +78,9 @@ int ChessBoard::isSquareAttacked(const int squareIndex, const int side) const {
 	for(index = 0; index < 4; ++index) {		
 		direction = BiDir[index];
 		t_sq = squareIndex + direction;
-		ASSERT(SqIs120(t_sq));
-		piece = board->pieces[t_sq];
-		ASSERT(PceValidEmptyOffbrd(piece));
+		ASSERT(sqIs120(t_sq));
+		piece = board->pieceAt(t_sq);
+		ASSERT(pceValidEmptyOffbrd(piece));
 		while(piece != OFFBOARD) {
 			if(piece != EMPTY) {
 				if(PIECE_IS_BISHOP_QUEEN(piece) && g_pieceCol[piece] == side) {
@@ -89,15 +89,15 @@ int ChessBoard::isSquareAttacked(const int squareIndex, const int side) const {
 				break;
 			}
 			t_sq += direction;
-			ASSERT(SqIs120(t_sq));
-			piece = board->pieces[t_sq];
+			ASSERT(sqIs120(t_sq));
+			piece = board->pieceAt(t_sq);
 		}
 	}
 	
 	// kings
 	for(index = 0; index < 8; ++index) {		
-		piece = board->pieces[squareIndex + KiDir[index]];
-		ASSERT(PceValidEmptyOffbrd(piece));
+		piece = board->pieceAt(squareIndex + KiDir[index]);
+		ASSERT(pceValidEmptyOffbrd(piece));
 		if(piece != OFFBOARD && PIECE_IS_KING(piece) && g_pieceCol[piece]==side) {
 			return BOOL_TYPE_TRUE;
 		}

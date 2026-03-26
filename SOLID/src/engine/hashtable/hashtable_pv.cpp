@@ -20,16 +20,16 @@ int HashTable::getPvLine(int depth, ChessBoard *board, SearchInfo *info) {
 
 		ASSERT(count < CHESS_MAX_SEARCH_DEPTH);
 
-		if( MoveExists(board, move) ) {
+		if( moveExists(board, move) ) {
 			board->makeMove(move);
-			info->PvArray[count++] = move;
+			info->setPvMove(count++, move);
 		} else {
 			break;
 		}
 		move = probePvMove(board);
 	}
 
-	while(board->ply > 0) {
+	while(board->getPly() > 0) {
 		board->takeMove();
 	}
 
@@ -37,68 +37,71 @@ int HashTable::getPvLine(int depth, ChessBoard *board, SearchInfo *info) {
 }
 
 void HashTable::clear() {
-
-	HashEntry *tableEntry;
-
-	for (tableEntry = pTable; tableEntry < pTable + numEntries; tableEntry++) {
-		tableEntry->posKey = 0ULL;
-		tableEntry->move = NOMOVE;
-		tableEntry->depth = 0;
-		tableEntry->score = 0;
-		tableEntry->flags = 0;
+	for (HashEntry& tableEntry : table_) {
+		tableEntry.posKey = 0ULL;
+		tableEntry.move = NOMOVE;
+		tableEntry.depth = 0;
+		tableEntry.score = 0;
+		tableEntry.flags = 0;
 	}
 	newWrite = 0;
 }
 
-void HashTable::init(int MB) {
+void HashTable::init(int mB) {
 
-	int HashSize = 0x100000 * MB;
-	numEntries = HashSize / sizeof(HashEntry);
+	int hashSize = 0x100000 * mB;
+	numEntries = hashSize / sizeof(HashEntry);
 	numEntries -= 2;
 
-	if(pTable != nullptr) {
-		free(pTable);
+	if (numEntries < 1) {
+		numEntries = 0;
+		table_.clear();
+		return;
 	}
 
-	pTable = (HashEntry *) malloc(numEntries * sizeof(HashEntry));
-	if(pTable == nullptr) {
-		if (MB > 1) {
-			printf("Hash Allocation Failed, trying %dMB...\n", MB/2);
-			init(MB/2);
+	try {
+		table_.assign(numEntries, HashEntry{});
+		clear();
+	} catch (...) {
+		if (mB > 1) {
+			printf("Hash Allocation Failed, trying %dMB...\n", mB/2);
+			init(mB/2);
 		} else {
 			printf("ERROR: Hash table allocation failed completely. Cannot allocate even 1MB.\n");
 			printf("The engine will run without a transposition table (performance degraded).\n");
 			numEntries = 0;
+			table_.clear();
 		}
-	} else {
-		clear();
 	}
 }
 
 int HashTable::probeEntry(ChessBoard *board, int *move, int *score, int alpha, int beta, int depth) {
+	if (numEntries <= 0) {
+		return BOOL_TYPE_FALSE;
+	}
 
-	int index = board->posKey % numEntries;
+	int index = board->getPositionKey() % numEntries;
 
 	ASSERT(index >= 0 && index <= numEntries - 1);
 	ASSERT(depth>=1&&depth<CHESS_MAX_SEARCH_DEPTH);
 	ASSERT(alpha<beta);
 	ASSERT(alpha>=-CHESS_INFINITE&&alpha<=CHESS_INFINITE);
 	ASSERT(beta>=-CHESS_INFINITE&&beta<=CHESS_INFINITE);
-	ASSERT(board->ply>=0&&board->ply<CHESS_MAX_SEARCH_DEPTH);
+	ASSERT(board->getPly()>=0&&board->getPly()<CHESS_MAX_SEARCH_DEPTH);
 
-	if( pTable[index].posKey == board->posKey ) {
-		*move = pTable[index].move;
-		if(pTable[index].depth >= depth){
+	if( table_[index].posKey == board->getPositionKey() ) {
+		*move = table_[index].move;
+		if(table_[index].depth >= depth){
 			hit++;
 
-			ASSERT(pTable[index].depth>=1&&pTable[index].depth<CHESS_MAX_SEARCH_DEPTH);
-			ASSERT(pTable[index].flags>=HFALPHA&&pTable[index].flags<=HFEXACT);
+			ASSERT(table_[index].depth>=1&&table_[index].depth<CHESS_MAX_SEARCH_DEPTH);
+			ASSERT(table_[index].flags>=HFALPHA&&table_[index].flags<=HFEXACT);
 
-			*score = pTable[index].score;
-			if(*score > CHESS_IS_MATE) *score -= board->ply;
-			else if(*score < -CHESS_IS_MATE) *score += board->ply;
+			*score = table_[index].score;
+			if(*score > CHESS_IS_MATE) *score -= board->getPly();
+			else if(*score < -CHESS_IS_MATE) *score += board->getPly();
 
-			switch(pTable[index].flags) {
+			switch(table_[index].flags) {
 
 				ASSERT(*score>=-CHESS_INFINITE&&*score<=CHESS_INFINITE);
 
@@ -124,38 +127,44 @@ int HashTable::probeEntry(ChessBoard *board, int *move, int *score, int alpha, i
 }
 
 void HashTable::storeEntry(ChessBoard *board, int move, int score, int flags, int depth) {
+	if (numEntries <= 0) {
+		return;
+	}
 
-	int index = board->posKey % numEntries;
+	int index = board->getPositionKey() % numEntries;
 
 	ASSERT(index >= 0 && index <= numEntries - 1);
 	ASSERT(depth>=1&&depth<CHESS_MAX_SEARCH_DEPTH);
 	ASSERT(flags>=HFALPHA&&flags<=HFEXACT);
 	ASSERT(score>=-CHESS_INFINITE&&score<=CHESS_INFINITE);
-	ASSERT(board->ply>=0&&board->ply<CHESS_MAX_SEARCH_DEPTH);
+	ASSERT(board->getPly()>=0&&board->getPly()<CHESS_MAX_SEARCH_DEPTH);
 
-	if( pTable[index].posKey == 0) {
+	if( table_[index].posKey == 0) {
 		newWrite++;
 	} else {
 		overWrite++;
 	}
 
-	if(score > CHESS_IS_MATE) score += board->ply;
-	else if(score < -CHESS_IS_MATE) score -= board->ply;
+	if(score > CHESS_IS_MATE) score += board->getPly();
+	else if(score < -CHESS_IS_MATE) score -= board->getPly();
 
-	pTable[index].move = move;
-	pTable[index].posKey = board->posKey;
-	pTable[index].flags = flags;
-	pTable[index].score = score;
-	pTable[index].depth = depth;
+	table_[index].move = move;
+	table_[index].posKey = board->getPositionKey();
+	table_[index].flags = flags;
+	table_[index].score = score;
+	table_[index].depth = depth;
 }
 
 int HashTable::probePvMove(const ChessBoard *board) const {
+	if (numEntries <= 0) {
+		return NOMOVE;
+	}
 
-	int index = board->posKey % numEntries;
+	int index = board->getPositionKey() % numEntries;
 	ASSERT(index >= 0 && index <= numEntries - 1);
 
-	if( pTable[index].posKey == board->posKey ) {
-		return pTable[index].move;
+	if( table_[index].posKey == board->getPositionKey() ) {
+		return table_[index].move;
 	}
 
 	return NOMOVE;

@@ -1,6 +1,6 @@
 /**
  * @file moves_execution.c
- * @brief Move execution and retraction functions
+ * @brief move execution and retraction functions
  * 
  * Handles making and unmaking moves on the board, including:
  * - Regular moves and captures
@@ -23,10 +23,10 @@
 #include "types_definitions.h"
 #include "stdio.h"
 
-#define HASH_PCE(piece,squareIndex) (board->posKey ^= (g_pieceKeys[(piece)][(squareIndex)]))
-#define HASH_CA (board->posKey ^= (g_castleKeys[(board->castlePerm)]))
-#define HASH_SIDE (board->posKey ^= (g_sideKey))
-#define HASH_EP (board->posKey ^= (g_pieceKeys[EMPTY][(board->enPas)]))
+#define HASH_PCE(piece,squareIndex) (board->xorPositionKey(g_pieceKeys[(piece)][(squareIndex)]))
+#define HASH_CA (board->xorPositionKey(g_castleKeys[(board->getCastlePermission())]))
+#define HASH_SIDE (board->xorPositionKey(g_sideKey))
+#define HASH_EP (board->xorPositionKey(g_pieceKeys[EMPTY][(board->getEnPassantSquare())]))
 
 const int CastlePerm[120] = {
     15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
@@ -43,40 +43,40 @@ const int CastlePerm[120] = {
     15, 15, 15, 15, 15, 15, 15, 15, 15, 15
 };
 
-static void ClearPiece(const int squareIndex, ChessBoard *board) {
+static void clearPiece(const int squareIndex, ChessBoard *board) {
 
-	ASSERT(SqOnBoard(squareIndex));
+	ASSERT(sqOnBoard(squareIndex));
 	ASSERT(board->check());
 	
-    int piece = board->pieces[squareIndex];
+    int piece = board->pieceAt(squareIndex);
 	
-    ASSERT(PieceValid(piece));
+    ASSERT(pieceValid(piece));
 	
 	int color = g_pieceCol[piece];
 	int index = 0;
 	int t_pceNum = -1;
 	
-	ASSERT(SideValid(color));
+	ASSERT(sideValid(color));
 	
     HASH_PCE(piece,squareIndex);
 	
-	board->pieces[squareIndex] = EMPTY;
-    board->material[color] -= g_pieceVal[piece];
+	board->pieceAt(squareIndex) = EMPTY;
+    board->materialAt(color) -= g_pieceVal[piece];
 	
-	if(PieceBig[piece]) {
-			board->bigPce[color]--;
-		if(PieceMaj[piece]) {
-			board->majPce[color]--;
+	if(pieceBig[piece]) {
+			board->bigPieceCountAt(color)--;
+		if(pieceMaj[piece]) {
+			board->majorPieceCountAt(color)--;
 		} else {
-			board->minPce[color]--;
+			board->minorPieceCountAt(color)--;
 		}
 	} else {
-		BITBOARD_CLEAR_BIT(board->pawns[color],SQUARE_120_TO_64(squareIndex));
-		BITBOARD_CLEAR_BIT(board->pawns[COLOR_TYPE_BOTH],SQUARE_120_TO_64(squareIndex));
+		BITBOARD_CLEAR_BIT(board->pawnsAt(color),SQUARE_120_TO_64(squareIndex));
+		BITBOARD_CLEAR_BIT(board->pawnsAt(COLOR_TYPE_BOTH),SQUARE_120_TO_64(squareIndex));
 	}
 	
-	for(index = 0; index < board->pieceCount[piece]; ++index) {
-		if(board->pList[piece][index] == squareIndex) {
+	for(index = 0; index < board->pieceCountAt(piece); ++index) {
+		if(board->pieceListAt(piece, index) == squareIndex) {
 			t_pceNum = index;
 			break;
 		}
@@ -85,73 +85,73 @@ static void ClearPiece(const int squareIndex, ChessBoard *board) {
 	ASSERT(t_pceNum != -1);
 	ASSERT(t_pceNum>=0&&t_pceNum<10);
 	
-	board->pieceCount[piece]--;		
+	board->pieceCountAt(piece)--;		
 	
-	board->pList[piece][t_pceNum] = board->pList[piece][board->pieceCount[piece]];
+	board->pieceListAt(piece, t_pceNum) = board->pieceListAt(piece, board->pieceCountAt(piece));
   
 }
 
 
-static void AddPiece(const int squareIndex, ChessBoard *board, const int piece) {
+static void addPiece(const int squareIndex, ChessBoard *board, const int piece) {
 
-    ASSERT(PieceValid(piece));
-    ASSERT(SqOnBoard(squareIndex));
+    ASSERT(pieceValid(piece));
+    ASSERT(sqOnBoard(squareIndex));
 	
 	int color = g_pieceCol[piece];
-	ASSERT(SideValid(color));
+	ASSERT(sideValid(color));
 
     HASH_PCE(piece,squareIndex);
 	
-	board->pieces[squareIndex] = piece;
+	board->pieceAt(squareIndex) = piece;
 
-    if(PieceBig[piece]) {
-			board->bigPce[color]++;
-		if(PieceMaj[piece]) {
-			board->majPce[color]++;
+    if(pieceBig[piece]) {
+			board->bigPieceCountAt(color)++;
+		if(pieceMaj[piece]) {
+			board->majorPieceCountAt(color)++;
 		} else {
-			board->minPce[color]++;
+			board->minorPieceCountAt(color)++;
 		}
 	} else {
-		BITBOARD_SET_BIT(board->pawns[color],SQUARE_120_TO_64(squareIndex));
-		BITBOARD_SET_BIT(board->pawns[COLOR_TYPE_BOTH],SQUARE_120_TO_64(squareIndex));
+		BITBOARD_SET_BIT(board->pawnsAt(color),SQUARE_120_TO_64(squareIndex));
+		BITBOARD_SET_BIT(board->pawnsAt(COLOR_TYPE_BOTH),SQUARE_120_TO_64(squareIndex));
 	}
 	
-	board->material[color] += g_pieceVal[piece];
-	board->pList[piece][board->pieceCount[piece]++] = squareIndex;
+	board->materialAt(color) += g_pieceVal[piece];
+	board->pieceListAt(piece, board->pieceCountAt(piece)++) = squareIndex;
 	
 }
 
-static void MovePiece(const int from, const int to, ChessBoard *board) {
+static void movePiece(const int from, const int to, ChessBoard *board) {
 
-    ASSERT(SqOnBoard(from));
-    ASSERT(SqOnBoard(to));
+    ASSERT(sqOnBoard(from));
+    ASSERT(sqOnBoard(to));
 	
 	int index = 0;
-	int piece = board->pieces[from];	
+	int piece = board->pieceAt(from);	
 	int color = g_pieceCol[piece];
-	ASSERT(SideValid(color));
-    ASSERT(PieceValid(piece));
+	ASSERT(sideValid(color));
+    ASSERT(pieceValid(piece));
 	
 #ifdef DEBUG
 	int t_PieceNum = BOOL_TYPE_FALSE;
 #endif
 
 	HASH_PCE(piece,from);
-	board->pieces[from] = EMPTY;
+	board->pieceAt(from) = EMPTY;
 	
 	HASH_PCE(piece,to);
-	board->pieces[to] = piece;
+	board->pieceAt(to) = piece;
 	
-	if(!PieceBig[piece]) {
-		BITBOARD_CLEAR_BIT(board->pawns[color],SQUARE_120_TO_64(from));
-		BITBOARD_CLEAR_BIT(board->pawns[COLOR_TYPE_BOTH],SQUARE_120_TO_64(from));
-		BITBOARD_SET_BIT(board->pawns[color],SQUARE_120_TO_64(to));
-		BITBOARD_SET_BIT(board->pawns[COLOR_TYPE_BOTH],SQUARE_120_TO_64(to));		
+	if(!pieceBig[piece]) {
+		BITBOARD_CLEAR_BIT(board->pawnsAt(color),SQUARE_120_TO_64(from));
+		BITBOARD_CLEAR_BIT(board->pawnsAt(COLOR_TYPE_BOTH),SQUARE_120_TO_64(from));
+		BITBOARD_SET_BIT(board->pawnsAt(color),SQUARE_120_TO_64(to));
+		BITBOARD_SET_BIT(board->pawnsAt(COLOR_TYPE_BOTH),SQUARE_120_TO_64(to));		
 	}    
 	
-	for(index = 0; index < board->pieceCount[piece]; ++index) {
-		if(board->pList[piece][index] == from) {
-			board->pList[piece][index] = to;
+	for(index = 0; index < board->pieceCountAt(piece); ++index) {
+		if(board->pieceListAt(piece, index) == from) {
+			board->pieceListAt(piece, index) = to;
 #ifdef DEBUG
 			t_PieceNum = BOOL_TYPE_TRUE;
 #endif
@@ -168,104 +168,104 @@ int ChessBoard::makeMove(int move) {
 	
 	int from = MOVE_GET_FROM_SQUARE(move);
     int to = MOVE_GET_TO_SQUARE(move);
-    int side = board->side;
+    int side = board->getSide();
 	
-	ASSERT(SqOnBoard(from));
-    ASSERT(SqOnBoard(to));
-    ASSERT(SideValid(side));
-    ASSERT(PieceValid(board->pieces[from]));
-	ASSERT(board->hisPly >= 0 && board->hisPly < CHESS_MAX_GAME_MOVES);
-	ASSERT(board->ply >= 0 && board->ply < CHESS_MAX_SEARCH_DEPTH);
+	ASSERT(sqOnBoard(from));
+    ASSERT(sqOnBoard(to));
+    ASSERT(sideValid(side));
+    ASSERT(pieceValid(board->pieceAt(from)));
+    ASSERT(board->getHistoryPly() >= 0 && board->getHistoryPly() < CHESS_MAX_GAME_MOVES);
+    ASSERT(board->getPly() >= 0 && board->getPly() < CHESS_MAX_SEARCH_DEPTH);
 	
-	board->history[board->hisPly].posKey = board->posKey;
+    board->history[board->getHistoryPly()].posKey = board->getPositionKey();
 	
 	if(move & MFLAGEP) {
         if(side == COLOR_TYPE_WHITE) {
-            ClearPiece(to-10,board);
+            clearPiece(to-10,board);
         } else {
-            ClearPiece(to+10,board);
+            clearPiece(to+10,board);
         }
     } else if (move & MFLAGCA) {
         switch(to) {
             case C1:
-                MovePiece(A1, D1, board);
+                movePiece(A1, D1, board);
 			break;
             case C8:
-                MovePiece(A8, D8, board);
+                movePiece(A8, D8, board);
 			break;
             case G1:
-                MovePiece(H1, F1, board);
+                movePiece(H1, F1, board);
 			break;
             case G8:
-                MovePiece(H8, F8, board);
+                movePiece(H8, F8, board);
 			break;
             default: ASSERT(BOOL_TYPE_FALSE); break;
         }
     }	
 	
-	if(board->enPas != NO_SQ) HASH_EP;
+    if(board->getEnPassantSquare() != NO_SQ) HASH_EP;
     HASH_CA;
 	
-	board->history[board->hisPly].move = move;
-    board->history[board->hisPly].fiftyMove = board->fiftyMove;
-    board->history[board->hisPly].enPas = board->enPas;
-    board->history[board->hisPly].castlePerm = board->castlePerm;
+    board->history[board->getHistoryPly()].move = move;
+    board->history[board->getHistoryPly()].fiftyMove = board->getFiftyMoveCounter();
+    board->history[board->getHistoryPly()].enPas = board->getEnPassantSquare();
+    board->history[board->getHistoryPly()].castlePerm = board->getCastlePermission();
 
-    board->castlePerm &= CastlePerm[from];
-    board->castlePerm &= CastlePerm[to];
-    board->enPas = NO_SQ;
+    board->andCastlePermission(CastlePerm[from]);
+    board->andCastlePermission(CastlePerm[to]);
+    board->setEnPassantSquare(NO_SQ);
 
 	HASH_CA;
 	
 	int captured = MOVE_GET_CAPTURED(move);
-    board->fiftyMove++;
+    board->incrementFiftyMoveCounter();
 	
 	if(captured != EMPTY) {
-        ASSERT(PieceValid(captured));
-        ClearPiece(to, board);
-        board->fiftyMove = 0;
+        ASSERT(pieceValid(captured));
+        clearPiece(to, board);
+        board->setFiftyMoveCounter(0);
     }
 	
-	board->hisPly++;
-	board->ply++;
+    board->incrementHistoryPly();
+    board->incrementPly();
 	
-	ASSERT(board->hisPly >= 0 && board->hisPly < CHESS_MAX_GAME_MOVES);
-	ASSERT(board->ply >= 0 && board->ply < CHESS_MAX_SEARCH_DEPTH);
+    ASSERT(board->getHistoryPly() >= 0 && board->getHistoryPly() < CHESS_MAX_GAME_MOVES);
+    ASSERT(board->getPly() >= 0 && board->getPly() < CHESS_MAX_SEARCH_DEPTH);
 	
-	if(g_piecePawn[board->pieces[from]]) {
-        board->fiftyMove = 0;
+	if(g_piecePawn[board->pieceAt(from)]) {
+        board->setFiftyMoveCounter(0);
         if(move & MFLAGPS) {
             if(side==COLOR_TYPE_WHITE) {
-                board->enPas=from+10;
-                ASSERT(g_ranksBoard[board->enPas]==RANK_TYPE_3);
+                board->setEnPassantSquare(from+10);
+                ASSERT(g_ranksBoard[board->getEnPassantSquare()]==RANK_TYPE_3);
             } else {
-                board->enPas=from-10;
-                ASSERT(g_ranksBoard[board->enPas]==RANK_TYPE_6);
+                board->setEnPassantSquare(from-10);
+                ASSERT(g_ranksBoard[board->getEnPassantSquare()]==RANK_TYPE_6);
             }
             HASH_EP;
         }
     }
 	
-	MovePiece(from, to, board);
+	movePiece(from, to, board);
 	
 	int promotedPiece = MOVE_GET_PROMOTED(move);
     if(promotedPiece != EMPTY)   {
-        ASSERT(PieceValid(promotedPiece) && !g_piecePawn[promotedPiece]);
-        ClearPiece(to, board);
-        AddPiece(to, board, promotedPiece);
+        ASSERT(pieceValid(promotedPiece) && !g_piecePawn[promotedPiece]);
+        clearPiece(to, board);
+        addPiece(to, board, promotedPiece);
     }
 	
-	if(g_pieceKing[board->pieces[to]]) {
-        board->KingSq[board->side] = to;
+	if(g_pieceKing[board->pieceAt(to)]) {
+        board->setKingSquare(board->getSide(), to);
     }
 	
-	board->side ^= 1;
+	board->toggleSide();
     HASH_SIDE;
 
     ASSERT(board->check());
 	
 		
-	if(board->isSquareAttacked(board->KingSq[side], board->side))  {
+	if(board->isSquareAttacked(board->getKingSquare(side), board->getSide()))  {
         board->takeMove();
         return BOOL_TYPE_FALSE;
     }
@@ -279,64 +279,64 @@ void ChessBoard::takeMove() {
 
 	ASSERT(board->check());
 	
-	board->hisPly--;
-    board->ply--;
+    board->decrementHistoryPly();
+    board->decrementPly();
 	
-	ASSERT(board->hisPly >= 0 && board->hisPly < CHESS_MAX_GAME_MOVES);
-	ASSERT(board->ply >= 0 && board->ply < CHESS_MAX_SEARCH_DEPTH);
+    ASSERT(board->getHistoryPly() >= 0 && board->getHistoryPly() < CHESS_MAX_GAME_MOVES);
+    ASSERT(board->getPly() >= 0 && board->getPly() < CHESS_MAX_SEARCH_DEPTH);
 	
-    int move = board->history[board->hisPly].move;
+    int move = board->history[board->getHistoryPly()].move;
     int from = MOVE_GET_FROM_SQUARE(move);
     int to = MOVE_GET_TO_SQUARE(move);	
 	
-	ASSERT(SqOnBoard(from));
-    ASSERT(SqOnBoard(to));
+	ASSERT(sqOnBoard(from));
+    ASSERT(sqOnBoard(to));
 	
-	if(board->enPas != NO_SQ) HASH_EP;
+	if(board->getEnPassantSquare() != NO_SQ) HASH_EP;
     HASH_CA;
 
-    board->castlePerm = board->history[board->hisPly].castlePerm;
-    board->fiftyMove = board->history[board->hisPly].fiftyMove;
-    board->enPas = board->history[board->hisPly].enPas;
+    board->setCastlePermission(board->history[board->getHistoryPly()].castlePerm);
+    board->setFiftyMoveCounter(board->history[board->getHistoryPly()].fiftyMove);
+    board->setEnPassantSquare(board->history[board->getHistoryPly()].enPas);
 
-    if(board->enPas != NO_SQ) HASH_EP;
+	if(board->getEnPassantSquare() != NO_SQ) HASH_EP;
     HASH_CA;
 
-    board->side ^= 1;
+    board->toggleSide();
     HASH_SIDE;
 	
 	if(MFLAGEP & move) {
-        if(board->side == COLOR_TYPE_WHITE) {
-            AddPiece(to-10, board, PIECE_TYPE_BLACK_PAWN);
+		if(board->getSide() == COLOR_TYPE_WHITE) {
+            addPiece(to-10, board, PIECE_TYPE_BLACK_PAWN);
         } else {
-            AddPiece(to+10, board, PIECE_TYPE_WHITE_PAWN);
+            addPiece(to+10, board, PIECE_TYPE_WHITE_PAWN);
         }
     } else if(MFLAGCA & move) {
         switch(to) {
-            case C1: MovePiece(D1, A1, board); break;
-            case C8: MovePiece(D8, A8, board); break;
-            case G1: MovePiece(F1, H1, board); break;
-            case G8: MovePiece(F8, H8, board); break;
+            case C1: movePiece(D1, A1, board); break;
+            case C8: movePiece(D8, A8, board); break;
+            case G1: movePiece(F1, H1, board); break;
+            case G8: movePiece(F8, H8, board); break;
             default: ASSERT(BOOL_TYPE_FALSE); break;
         }
     }
 	
-	MovePiece(to, from, board);
+	movePiece(to, from, board);
 	
-	if(g_pieceKing[board->pieces[from]]) {
-        board->KingSq[board->side] = from;
+	if(g_pieceKing[board->pieceAt(from)]) {
+    board->setKingSquare(board->getSide(), from);
     }
 	
 	int captured = MOVE_GET_CAPTURED(move);
     if(captured != EMPTY) {
-        ASSERT(PieceValid(captured));
-        AddPiece(to, board, captured);
+        ASSERT(pieceValid(captured));
+        addPiece(to, board, captured);
     }
 	
 	if(MOVE_GET_PROMOTED(move) != EMPTY)   {
-        ASSERT(PieceValid(MOVE_GET_PROMOTED(move)) && !g_piecePawn[MOVE_GET_PROMOTED(move)]);
-        ClearPiece(from, board);
-        AddPiece(from, board, (g_pieceCol[MOVE_GET_PROMOTED(move)] == COLOR_TYPE_WHITE ? PIECE_TYPE_WHITE_PAWN : PIECE_TYPE_BLACK_PAWN));
+        ASSERT(pieceValid(MOVE_GET_PROMOTED(move)) && !g_piecePawn[MOVE_GET_PROMOTED(move)]);
+        clearPiece(from, board);
+        addPiece(from, board, (g_pieceCol[MOVE_GET_PROMOTED(move)] == COLOR_TYPE_WHITE ? PIECE_TYPE_WHITE_PAWN : PIECE_TYPE_BLACK_PAWN));
     }
 	
     ASSERT(board->check());
@@ -348,26 +348,26 @@ void ChessBoard::makeNullMove() {
 	ChessBoard *board = this;
 
     ASSERT(board->check());
-    ASSERT(!board->isSquareAttacked(board->KingSq[board->side],board->side^1));
+    ASSERT(!board->isSquareAttacked(board->getKingSquare(board->getSide()),board->getSide()^1));
 
-    board->ply++;
-    board->history[board->hisPly].posKey = board->posKey;
+    board->incrementPly();
+    board->history[board->getHistoryPly()].posKey = board->getPositionKey();
 
-    if(board->enPas != NO_SQ) HASH_EP;
+	if(board->getEnPassantSquare() != NO_SQ) HASH_EP;
 
-    board->history[board->hisPly].move = NOMOVE;
-    board->history[board->hisPly].fiftyMove = board->fiftyMove;
-    board->history[board->hisPly].enPas = board->enPas;
-    board->history[board->hisPly].castlePerm = board->castlePerm;
-    board->enPas = NO_SQ;
+    board->history[board->getHistoryPly()].move = NOMOVE;
+    board->history[board->getHistoryPly()].fiftyMove = board->getFiftyMoveCounter();
+    board->history[board->getHistoryPly()].enPas = board->getEnPassantSquare();
+    board->history[board->getHistoryPly()].castlePerm = board->getCastlePermission();
+    board->setEnPassantSquare(NO_SQ);
 
-    board->side ^= 1;
-    board->hisPly++;
+    board->toggleSide();
+    board->incrementHistoryPly();
     HASH_SIDE;
    
     ASSERT(board->check());
-	ASSERT(board->hisPly >= 0 && board->hisPly < CHESS_MAX_GAME_MOVES);
-	ASSERT(board->ply >= 0 && board->ply < CHESS_MAX_SEARCH_DEPTH);
+    ASSERT(board->getHistoryPly() >= 0 && board->getHistoryPly() < CHESS_MAX_GAME_MOVES);
+    ASSERT(board->getPly() >= 0 && board->getPly() < CHESS_MAX_SEARCH_DEPTH);
 
     return;
 } // makeNullMove
@@ -376,22 +376,22 @@ void ChessBoard::takeNullMove() {
 	ChessBoard *board = this;
     ASSERT(board->check());
 
-    board->hisPly--;
-    board->ply--;
+    board->decrementHistoryPly();
+    board->decrementPly();
 
-    if(board->enPas != NO_SQ) HASH_EP;
+	if(board->getEnPassantSquare() != NO_SQ) HASH_EP;
 
-    board->castlePerm = board->history[board->hisPly].castlePerm;
-    board->fiftyMove = board->history[board->hisPly].fiftyMove;
-    board->enPas = board->history[board->hisPly].enPas;
+    board->setCastlePermission(board->history[board->getHistoryPly()].castlePerm);
+    board->setFiftyMoveCounter(board->history[board->getHistoryPly()].fiftyMove);
+    board->setEnPassantSquare(board->history[board->getHistoryPly()].enPas);
 
-    if(board->enPas != NO_SQ) HASH_EP;
-    board->side ^= 1;
+	if(board->getEnPassantSquare() != NO_SQ) HASH_EP;
+    board->toggleSide();
     HASH_SIDE;
   
     ASSERT(board->check());
-	ASSERT(board->hisPly >= 0 && board->hisPly < CHESS_MAX_GAME_MOVES);
-	ASSERT(board->ply >= 0 && board->ply < CHESS_MAX_SEARCH_DEPTH);
+    ASSERT(board->getHistoryPly() >= 0 && board->getHistoryPly() < CHESS_MAX_GAME_MOVES);
+    ASSERT(board->getPly() >= 0 && board->getPly() < CHESS_MAX_SEARCH_DEPTH);
 }
 
 

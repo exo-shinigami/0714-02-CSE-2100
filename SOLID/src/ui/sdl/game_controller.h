@@ -63,7 +63,7 @@ private:
     const IEvaluator* evaluator_;
     
     // Components (following SRP)
-    GUIRenderer* renderer_;
+    gUIRenderer* renderer_;
     GUIInputHandler* inputHandler_;
     GameTimer* timer_;
     MoveHistoryTracker* history_;

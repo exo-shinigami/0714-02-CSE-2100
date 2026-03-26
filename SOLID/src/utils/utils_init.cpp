@@ -47,7 +47,7 @@ U64 g_blackPassedMask[64];
 U64 g_whitePassedMask[64];
 U64 g_isolatedMask[64];
 
-void Init_EvalMasks() {
+void EngineBootstrapService::initEvalMasks() {
 
 	int squareIndex, tsq, r, f;
 
@@ -118,7 +118,7 @@ void Init_EvalMasks() {
 	}
 }
 
-void Init_FilesRanksBoard() {
+void EngineBootstrapService::initFilesRanksBoard() {
 
 	int index = 0;
 	int file = FILE_TYPE_A;
@@ -132,14 +132,14 @@ void Init_FilesRanksBoard() {
 
 	for(rank = RANK_TYPE_1; rank <= RANK_TYPE_8; ++rank) {
 		for(file = FILE_TYPE_A; file <= FILE_TYPE_H; ++file) {
-			squareIndex = FILE_RANK_TO_SQUARE(file,rank);
+			squareIndex = fILERANKTOSQUARE(file,rank);
 			g_filesBoard[squareIndex] = file;
 			g_ranksBoard[squareIndex] = rank;
 		}
 	}
 }
 
-void Init_HashKeys() {
+void EngineBootstrapService::initHashKeys() {
 
 	int index = 0;
 	int index2 = 0;
@@ -155,7 +155,7 @@ void Init_HashKeys() {
 
 }
 
-void Init_BitMasks() {
+void EngineBootstrapService::initBitMasks() {
 	int index = 0;
 
 	for(index = 0; index < 64; index++) {
@@ -169,7 +169,7 @@ void Init_BitMasks() {
 	}
 }
 
-void Init_Square120To64() {
+void EngineBootstrapService::initSquare120To64() {
 
 	int index = 0;
 	int file = FILE_TYPE_A;
@@ -186,8 +186,8 @@ void Init_Square120To64() {
 
 	for(rank = RANK_TYPE_1; rank <= RANK_TYPE_8; ++rank) {
 		for(file = FILE_TYPE_A; file <= FILE_TYPE_H; ++file) {
-			squareIndex = FILE_RANK_TO_SQUARE(file,rank);
-			ASSERT(SqOnBoard(squareIndex));
+			squareIndex = fILERANKTOSQUARE(file,rank);
+			ASSERT(sqOnBoard(squareIndex));
 			g_square64To120[sq64] = squareIndex;
 			g_square120To64[squareIndex] = sq64;
 			sq64++;
@@ -195,12 +195,36 @@ void Init_Square120To64() {
 	}
 }
 
-void Init_All() {
-	Init_Square120To64();
-	Init_BitMasks();
-	Init_HashKeys();
-	Init_FilesRanksBoard();
-	Init_EvalMasks();
-	Init_MvvLva();
-	PolyBook_Init();
+void EngineBootstrapService::initAll() {
+	initSquare120To64();
+	initBitMasks();
+	initHashKeys();
+	initFilesRanksBoard();
+	initEvalMasks();
+	initMvvLva();
+	polyBookInit();
+}
+
+void initEvalMasks() {
+	EngineBootstrapService::initEvalMasks();
+}
+
+void initFilesRanksBoard() {
+	EngineBootstrapService::initFilesRanksBoard();
+}
+
+void initHashKeys() {
+	EngineBootstrapService::initHashKeys();
+}
+
+void initBitMasks() {
+	EngineBootstrapService::initBitMasks();
+}
+
+void initSquare120To64() {
+	EngineBootstrapService::initSquare120To64();
+}
+
+void initAll() {
+	EngineBootstrapService::initAll();
 }

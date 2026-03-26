@@ -7,7 +7,7 @@
  * - Piece values
  * - Side values
  * - File and rank indices
- * - Move lists
+ * - move lists
  * 
  * Also includes debugging functions:
  * - Evaluation symmetry testing
@@ -24,22 +24,22 @@
 #include "stdio.h"
 #include "string.h"
 
-int MoveListOk(const MoveList *list,  const ChessBoard *board) {
-	if(list->size() < 0 || list->size() >= CHESS_MAX_POSITION_MOVES) {
+int ValidationService::isMoveListValid(const MoveList& list, const ChessBoard& board) {
+    if(list.size() < 0 || list.size() >= CHESS_MAX_POSITION_MOVES) {
 		return BOOL_TYPE_FALSE;
 	}
 
-	int MoveNum;
+	int moveNum;
 	int from = 0;
 	int to = 0;
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
-		to = MOVE_GET_TO_SQUARE(list->at(MoveNum).raw());
-		from = MOVE_GET_FROM_SQUARE(list->at(MoveNum).raw());
-		if(!SqOnBoard(to) || !SqOnBoard(from)) {
+    for(moveNum = 0; moveNum < list.size(); ++moveNum) {
+        to = MOVE_GET_TO_SQUARE(list.at(moveNum).raw());
+        from = MOVE_GET_FROM_SQUARE(list.at(moveNum).raw());
+        if(!isSquareOnBoard(to) || !isSquareOnBoard(from)) {
 			return BOOL_TYPE_FALSE;
 		}
-		if(!PieceValid(board->pieces[from])) {
-			board->print();
+        if(!isPieceValid(board.pieceAt(from))) {
+            board.print();
 			return BOOL_TYPE_FALSE;
 		}
 	}
@@ -47,41 +47,42 @@ int MoveListOk(const MoveList *list,  const ChessBoard *board) {
 	return BOOL_TYPE_TRUE;
 }
 
-int SqIs120(const int squareIndex) {
+int ValidationService::isSquare120(int squareIndex) {
 	return (squareIndex>=0 && squareIndex<120);
 }
 
-int PceValidEmptyOffbrd(const int piece) {
-	return (PieceValidEmpty(piece) || piece == OFFBOARD);
+int ValidationService::isPieceValidEmptyOrOffboard(int piece) {
+    return (isPieceValidEmpty(piece) || piece == OFFBOARD);
 }
-int SqOnBoard(const int squareIndex) {
+
+int ValidationService::isSquareOnBoard(int squareIndex) {
 	return g_filesBoard[squareIndex]==OFFBOARD ? 0 : 1;
 }
 
-int SideValid(const int side) {
+int ValidationService::isSideValid(int side) {
 	return (side==COLOR_TYPE_WHITE || side == COLOR_TYPE_BLACK) ? 1 : 0;
 }
 
-int FileRankValid(const int fr) {
-	return (fr >= 0 && fr <= 7) ? 1 : 0;
+int ValidationService::isFileRankValid(int fileOrRank) {
+    return (fileOrRank >= 0 && fileOrRank <= 7) ? 1 : 0;
 }
 
-int PieceValidEmpty(const int piece) {
+int ValidationService::isPieceValidEmpty(int piece) {
 	return (piece >= EMPTY && piece <= PIECE_TYPE_BLACK_KING) ? 1 : 0;
 }
 
-int PieceValid(const int piece) {
+int ValidationService::isPieceValid(int piece) {
 	return (piece >= PIECE_TYPE_WHITE_PAWN && piece <= PIECE_TYPE_BLACK_KING) ? 1 : 0;
 }
 
-void DebugAnalysisTest(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+void ValidationService::runAnalysisTest(ChessBoard& board, SearchInfo& info, const IEvaluator& eval) {
 
 	FILE *file;
     file = fopen("lct2.epd","r");
     char lineIn [1024];
 
-	info->depth = CHESS_MAX_SEARCH_DEPTH;
-	info->timeset = BOOL_TYPE_TRUE;
+    info.depth = CHESS_MAX_SEARCH_DEPTH;
+    info.timeset = BOOL_TYPE_TRUE;
 	int time = 1140000;
 
 
@@ -90,14 +91,14 @@ void DebugAnalysisTest(ChessBoard *board, SearchInfo *info, const IEvaluator& ev
         return;
     }  else {
         while(fgets (lineIn , 1024 , file) != NULL) {
-			info->starttime = Misc_GetTimeMs();
-			info->stoptime = info->starttime + time;
-			board->hashTable.clear();
-            board->parseFromFEN(lineIn);
+			info.starttime = miscGetTimeMs();
+			info.stoptime = info.starttime + time;
+            board.clearHashTable();
+            board.parseFromFEN(lineIn);
             printf("\n%s\n",lineIn);
 			printf("time:%d start:%d stop:%d depth:%d timeset:%d\n",
-				time,info->starttime,info->stoptime,info->depth,info->timeset);
-			Search_Position(board, info, eval);
+				time,info.starttime,info.stoptime,info.depth,info.timeset);
+			searchPosition(&board, &info, eval);
             memset(&lineIn[0], 0, sizeof(lineIn));
         }
     }
@@ -105,7 +106,7 @@ void DebugAnalysisTest(ChessBoard *board, SearchInfo *info, const IEvaluator& ev
 
 
 
-void MirrorEvalTest(ChessBoard *board) {
+void ValidationService::runMirrorEvalTest(ChessBoard& board) {
     FILE *file;
     file = fopen("mirror.epd","r");
     char lineIn [1024];
@@ -116,18 +117,18 @@ void MirrorEvalTest(ChessBoard *board) {
         return;
     }  else {
         while(fgets (lineIn , 1024 , file) != NULL) {
-            board->parseFromFEN(lineIn);
+            board.parseFromFEN(lineIn);
             positions++;
-            ev1 = Evaluate_Position(board);
-            board->mirror();
-            ev2 = Evaluate_Position(board);
+            ev1 = evaluatePosition(&board);
+            board.mirror();
+            ev2 = evaluatePosition(&board);
 
             if(ev1 != ev2) {
                 printf("\n\n\n");
-                board->parseFromFEN(lineIn);
-                board->print();
-                board->mirror();
-                board->print();
+                board.parseFromFEN(lineIn);
+                board.print();
+                board.mirror();
+                board.print();
                 printf("\n\nMirror Fail:\n%s\n",lineIn);
                 getchar();
                 return;
@@ -140,5 +141,48 @@ void MirrorEvalTest(ChessBoard *board) {
             memset(&lineIn[0], 0, sizeof(lineIn));
         }
     }
+}
+
+int moveListOk(const MoveList *list, const ChessBoard *board) {
+    ASSERT(list != nullptr && board != nullptr);
+    return ValidationService::isMoveListValid(*list, *board);
+}
+
+int sqIs120(const int squareIndex) {
+    return ValidationService::isSquare120(squareIndex);
+}
+
+int pceValidEmptyOffbrd(const int piece) {
+    return ValidationService::isPieceValidEmptyOrOffboard(piece);
+}
+
+int sqOnBoard(const int squareIndex) {
+    return ValidationService::isSquareOnBoard(squareIndex);
+}
+
+int sideValid(const int side) {
+    return ValidationService::isSideValid(side);
+}
+
+int fileRankValid(const int fr) {
+    return ValidationService::isFileRankValid(fr);
+}
+
+int pieceValidEmpty(const int piece) {
+    return ValidationService::isPieceValidEmpty(piece);
+}
+
+int pieceValid(const int piece) {
+    return ValidationService::isPieceValid(piece);
+}
+
+void debugAnalysisTest(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+    ASSERT(board != nullptr && info != nullptr);
+    ValidationService::runAnalysisTest(*board, *info, eval);
+}
+
+void mirrorEvalTest(ChessBoard *board) {
+    ASSERT(board != nullptr);
+    ValidationService::runMirrorEvalTest(*board);
 }
 

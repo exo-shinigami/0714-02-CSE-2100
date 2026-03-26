@@ -14,8 +14,6 @@
 #ifndef BOARD_QUERY_INTERFACE_H
 #define BOARD_QUERY_INTERFACE_H
 
-#include "types_definitions.h"
-
 /**
  * @class IBoardQuery
  * @brief Read-only interface for querying board state
@@ -43,20 +41,25 @@ public:
     // Piece queries
     virtual int getKingSquare(int side) const = 0;
     virtual int getPieceCount(int piece) const = 0;
+    virtual int getPieceSquare(int piece, int index) const = 0;
     virtual int getMaterial(int side) const = 0;
     
     // Attack and validation
-    virtual bool isSquareAttacked(int square, int bySide) const = 0;
-    virtual bool isInCheck(int side) const = 0;
+    virtual int isSquareAttacked(int square, int bySide) const = 0;
+    virtual int isInCheck(int side) const = 0;
     
     // Bitboard access
-    virtual U64 getPawns(int side) const = 0;
+    virtual unsigned long long getPawns(int side) const = 0;
     
     // Position key for hashing
-    virtual U64 getPositionKey() const = 0;
+    virtual unsigned long long getPositionKey() const = 0;
+
+    // History queries
+    virtual int getHistoryPly() const = 0;
+    virtual unsigned long long getHistoryPositionKey(int index) const = 0;
     
     // Validation
-    virtual bool isValid() const = 0;
+    virtual int isValid() const = 0;
     
     // Display
     virtual void print() const = 0;
@@ -78,11 +81,14 @@ class IBoardModifier {
 public:
     virtual ~IBoardModifier() = default;
     
-    // Move execution
-    virtual bool makeMove(int move) = 0;
+    // move execution
+    virtual int makeMove(int move) = 0;
     virtual void takeMove() = 0;
     virtual void makeNullMove() = 0;
     virtual void takeNullMove() = 0;
+
+    // Probe whether at least one legal move exists from current position
+    virtual int hasAnyLegalMove() = 0;
     
     // Board setup
     virtual void reset() = 0;

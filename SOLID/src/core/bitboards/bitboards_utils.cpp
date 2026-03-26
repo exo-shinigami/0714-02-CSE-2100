@@ -25,20 +25,20 @@ const int BitTable[64] = {
   58, 20, 37, 17, 36, 8
 };
 
-int Bitboard_PopBit(U64 *bb) {
+int bitboardPopBit(U64 *bb) {
   U64 b = *bb ^ (*bb - 1);
   unsigned int fold = (unsigned) ((b & 0xffffffff) ^ (b >> 32));
   *bb &= (*bb - 1);
   return BitTable[(fold * 0x783a9b23) >> 26];
 }
 
-int Bitboard_CountBits(U64 b) {
+int bitboardCountBits(U64 b) {
   int r;
   for(r = 0; b; r++, b &= b - 1);
   return r;
 }
 
-void Bitboard_Print(U64 bb) {
+void bitboardPrint(U64 bb) {
 
 	U64 shiftMe = 1ULL;
 	
@@ -50,7 +50,7 @@ void Bitboard_Print(U64 bb) {
 	printf("\n");
 	for(rank = RANK_TYPE_8; rank >= RANK_TYPE_1; --rank) {
 		for(file = FILE_TYPE_A; file <= FILE_TYPE_H; ++file) {
-			squareIndex = FILE_RANK_TO_SQUARE(file,rank);	// 120 based		
+			squareIndex = fILERANKTOSQUARE(file,rank);	// 120 based		
 			sq64 = SQUARE_120_TO_64(squareIndex); // 64 based
 			
 			if((shiftMe << sq64) & bb) 

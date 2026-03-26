@@ -28,90 +28,18 @@
 #include "types_definitions.h"
 #include "string.h"
 
-int ThreeFoldRep(const ChessBoard *board) {
-
-	ASSERT(board->check());
-
-	int i = 0, r = 0;
-	for (i = 0; i < board->hisPly; ++i)	{
-	    if (board->history[i].posKey == board->posKey) {
-		    r++;
-		}
-	}
-	return r;
-}
-
-int DrawMaterial(const ChessBoard *board) {
-	ASSERT(board->check());
-
-    if (board->pieceCount[PIECE_TYPE_WHITE_PAWN] || board->pieceCount[PIECE_TYPE_BLACK_PAWN]) return BOOL_TYPE_FALSE;
-    if (board->pieceCount[PIECE_TYPE_WHITE_QUEEN] || board->pieceCount[PIECE_TYPE_BLACK_QUEEN] || board->pieceCount[PIECE_TYPE_WHITE_ROOK] || board->pieceCount[PIECE_TYPE_BLACK_ROOK]) return BOOL_TYPE_FALSE;
-    if (board->pieceCount[PIECE_TYPE_WHITE_BISHOP] > 1 || board->pieceCount[PIECE_TYPE_BLACK_BISHOP] > 1) {return BOOL_TYPE_FALSE;}
-    if (board->pieceCount[PIECE_TYPE_WHITE_KNIGHT] > 1 || board->pieceCount[PIECE_TYPE_BLACK_KNIGHT] > 1) {return BOOL_TYPE_FALSE;}
-    if (board->pieceCount[PIECE_TYPE_WHITE_KNIGHT] && board->pieceCount[PIECE_TYPE_WHITE_BISHOP]) {return BOOL_TYPE_FALSE;}
-    if (board->pieceCount[PIECE_TYPE_BLACK_KNIGHT] && board->pieceCount[PIECE_TYPE_BLACK_BISHOP]) {return BOOL_TYPE_FALSE;}
-
-    return BOOL_TYPE_TRUE;
-}
-
-int checkresult(ChessBoard *board) {
-	ASSERT(board->check());
-
-    if (board->fiftyMove > 100) {
-     printf("1/2-1/2 {fifty move rule (claimed by Gambit)}\n"); return BOOL_TYPE_TRUE;
-    }
-
-    if (ThreeFoldRep(board) >= 2) {
-     printf("1/2-1/2 {3-fold repetition (claimed by Gambit)}\n"); return BOOL_TYPE_TRUE;
-    }
-
-	if (DrawMaterial(board) == BOOL_TYPE_TRUE) {
-     printf("1/2-1/2 {insufficient material (claimed by Gambit)}\n"); return BOOL_TYPE_TRUE;
-    }
-
-	MoveList list[1];
-    Move_GenerateAll(board,list);
-
-    int MoveNum = 0;
-	int found = 0;
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
-
-        if ( !board->makeMove(list->at(MoveNum).raw()))  {
-            continue;
-        }
-        found++;
-		board->takeMove();
-		break;
-    }
-
-	if(found != 0) return BOOL_TYPE_FALSE;
-
-	int InCheck = board->isSquareAttacked(board->KingSq[board->side], board->side^1);
-
-	if(InCheck == BOOL_TYPE_TRUE)	{
-	    if(board->side == COLOR_TYPE_WHITE) {
-	      printf("0-1 {black mates (claimed by Gambit)}\n");return BOOL_TYPE_TRUE;
-        } else {
-	      printf("1-0 {white mates (claimed by Gambit)}\n");return BOOL_TYPE_TRUE;
-        }
-    } else {
-      printf("\n1/2-1/2 {stalemate (claimed by Gambit)}\n");return BOOL_TYPE_TRUE;
-    }
-	return BOOL_TYPE_FALSE;
-}
-
-void PrintOptions() {
+void printOptions() {
 	printf("feature ping=1 setboard=1 colors=0 usermove=1 memory=1\n");
 	printf("feature done=1\n");
 }
 
-void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+void xBoardLoop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
-	info->GAME_MODE = MODE_TYPE_XBOARD;
-	info->POST_THINKING = BOOL_TYPE_TRUE;
+	info->gameMode = MODE_TYPE_XBOARD;
+	info->postThinking = BOOL_TYPE_TRUE;
 	setbuf(stdin, NULL);
     setbuf(stdout, NULL);
-	PrintOptions(); // HACK
+	printOptions(); // Advertise supported XBoard features on startup.
 
 	int depth = -1, movestogo[2] = {30,30 }, movetime = -1;
 	int time = -1, inc = 0;
@@ -121,7 +49,7 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 	int mps;
 	int move = NOMOVE;
 	char inBuf[80], command[80];
-	int MB;
+	int mB;
 
 	engineSide = COLOR_TYPE_BLACK;
 	board->parseFromFEN(CHESS_START_FEN);
@@ -132,13 +60,13 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
 		fflush(stdout);
 
-		if(board->side == engineSide && checkresult(board) == BOOL_TYPE_FALSE) {
-			info->starttime = Misc_GetTimeMs();
+		if(board->getSide() == engineSide && checkresult(board) == BOOL_TYPE_FALSE) {
+			info->starttime = miscGetTimeMs();
 			info->depth = depth;
 
 			if(time != -1) {
 				info->timeset = BOOL_TYPE_TRUE;
-				time /= movestogo[board->side];
+				time /= movestogo[board->getSide()];
 				time -= 50;
 				info->stoptime = info->starttime + time + inc;
 			}
@@ -148,13 +76,13 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 			}
 
 			printf("time:%d start:%d stop:%d depth:%d timeset:%d movestogo:%d mps:%d\n",
-				time,info->starttime,info->stoptime,info->depth,info->timeset, movestogo[board->side], mps);
-				Search_Position(board, info, eval);
+				time,info->starttime,info->stoptime,info->depth,info->timeset, movestogo[board->getSide()], mps);
+				searchPosition(board, info, eval);
 
 			if(mps != 0) {
-				movestogo[board->side^1]--;
-				if(movestogo[board->side^1] < 1) {
-					movestogo[board->side^1] = mps;
+				movestogo[board->getSide()^1]--;
+				if(movestogo[board->getSide()^1] < 1) {
+					movestogo[board->getSide()^1] = mps;
 				}
 			}
 
@@ -182,7 +110,7 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 
 		if(!strcmp(command, "protover")){
-			PrintOptions();
+			printOptions();
 		    continue;
 		}
 
@@ -206,11 +134,11 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 		
 		if(!strcmp(command, "memory")) {			
-			sscanf(inBuf, "memory %d", &MB);		
-		    if(MB < 4) MB = 4;
-			if(MB > CHESS_MAX_HASH) MB = CHESS_MAX_HASH;
-			printf("Set Hash to %d MB\n",MB);
-			board->hashTable.init(MB);
+			sscanf(inBuf, "memory %d", &mB);		
+		    if(mB < 4) mB = 4;
+			if(mB > CHESS_MAX_HASH) mB = CHESS_MAX_HASH;
+			printf("Set Hash to %d mB\n",mB);
+			board->initHashTable(mB);
 			continue;
 		}
 
@@ -240,7 +168,7 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 
 		if(!strcmp(command, "new")) {
-			board->hashTable.clear();
+			board->clearHashTable();
 			engineSide = COLOR_TYPE_BLACK;
 			board->parseFromFEN(CHESS_START_FEN);
 			depth = -1;
@@ -255,28 +183,28 @@ void XBoard_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 
 		if(!strcmp(command, "go")) {
-			engineSide = board->side;
+			engineSide = board->getSide();
 			continue;
 		}
 
 		if(!strcmp(command, "usermove")){
-			movestogo[board->side]--;
-			move = Move_Parse(inBuf+9, board);
+			movestogo[board->getSide()]--;
+			move = moveParse(inBuf+9, board);
 			if(move == NOMOVE) continue;
 			board->makeMove(move);
-            board->ply=0;
+			board->setPly(0);
 		}
     }
 }
 
 
-void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+void consoleLoop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
 	printf("Welcome to Gambit In Console Mode!\n");
 	printf("Type help for commands\n\n");
 
-	info->GAME_MODE = MODE_TYPE_CONSOLE;
-	info->POST_THINKING = BOOL_TYPE_TRUE;
+	info->gameMode = MODE_TYPE_CONSOLE;
+	info->postThinking = BOOL_TYPE_TRUE;
 	setbuf(stdin, NULL);
     setbuf(stdout, NULL);
 
@@ -292,8 +220,8 @@ void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
 		fflush(stdout);
 
-		if(board->side == engineSide && checkresult(board) == BOOL_TYPE_FALSE) {
-			info->starttime = Misc_GetTimeMs();
+		if(board->getSide() == engineSide && checkresult(board) == BOOL_TYPE_FALSE) {
+			info->starttime = miscGetTimeMs();
 			info->depth = depth;
 
 			if(movetime != 0) {
@@ -301,7 +229,7 @@ void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 				info->stoptime = info->starttime + movetime;
 			}
 
-			Search_Position(board, info, eval);
+			searchPosition(board, info, eval);
 		}
 
 		printf("\nGambit > ");
@@ -335,16 +263,16 @@ void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
 		if(!strcmp(command, "mirror")) {
 			engineSide = COLOR_TYPE_BOTH;
-			MirrorEvalTest(board);
+			mirrorEvalTest(board);
 			continue;
 		}
 
 		if(!strcmp(command, "eval")) {
 			board->print();
-			printf("Eval:%d",Evaluate_Position(board));
+			printf("Eval:%d", eval.evaluate(*board));
 			board->mirror();
 			board->print();
-			printf("Eval:%d",Evaluate_Position(board));
+			printf("Eval:%d", eval.evaluate(*board));
 			continue;
 		}
 
@@ -360,7 +288,7 @@ void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 
 		if(!strcmp(command, "post")) {
-			info->POST_THINKING = BOOL_TYPE_TRUE;
+			info->postThinking = BOOL_TYPE_TRUE;
 			continue;
 		}
 
@@ -370,7 +298,7 @@ void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 
 		if(!strcmp(command, "nopost")) {
-			info->POST_THINKING = BOOL_TYPE_FALSE;
+			info->postThinking = BOOL_TYPE_FALSE;
 			continue;
 		}
 
@@ -402,29 +330,29 @@ void Console_Loop(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 		}
 
 		if(!strcmp(command, "new")) {
-			board->hashTable.clear();
+			board->clearHashTable();
 			engineSide = COLOR_TYPE_BLACK;
 			board->parseFromFEN(CHESS_START_FEN);
 			continue;
 		}
 
 		if(!strcmp(command, "go")) {
-			engineSide = board->side;
+			engineSide = board->getSide();
 			continue;
 		}
 
-		move = Move_Parse(inBuf, board);
+		move = moveParse(inBuf, board);
 		if(move == NOMOVE) {
 			printf("Command unknown:%s\n",inBuf);
 			continue;
 		}
 		board->makeMove(move);
-		board->ply=0;
+		board->setPly(0);
     }
 }
 
 void XBoardProtocol::run(ChessBoard& board, SearchInfo& info, const IEvaluator& eval) {
-	XBoard_Loop(&board, &info, eval);
+	xBoardLoop(&board, &info, eval);
 }
 
 

@@ -33,6 +33,7 @@ SOURCES_CORE = \
 	$(SRC_CORE_TYPES)/types_data.cpp \
 	$(SRC_CORE_BOARD)/board_representation.cpp \
 	$(SRC_CORE_BOARD)/board_hashkeys.cpp \
+	$(SRC_CORE_BOARD)/game_rules.cpp \
 	$(SRC_CORE_BOARD)/board_validate.cpp \
 	$(SRC_CORE_MOVES)/moves_generation.cpp \
 	$(SRC_CORE_MOVES)/moves_execution.cpp \
@@ -52,7 +53,10 @@ SOURCES_CORE = \
 
 # GUI source files (added to core for full build)
 SOURCES_GUI = \
-	$(SRC_UI_SDL)/sdl_gui.cpp
+	$(SRC_UI_SDL)/sdl_gui.cpp \
+	$(SRC_UI_SDL)/game_timer.cpp \
+	$(SRC_UI_SDL)/move_history_tracker.cpp \
+	$(SRC_UI_SDL)/gui_input_handler.cpp
 
 # All source files
 SOURCES = $(SOURCES_CORE) $(SOURCES_GUI)

@@ -31,27 +31,27 @@ U64 ChessBoard::generatePositionKey() const {
 	
 	// pieces
 	for(squareIndex = 0; squareIndex < CHESS_BOARD_SQUARE_NUM; ++squareIndex) {
-		piece = board->pieces[squareIndex];
+		piece = board->pieceAt(squareIndex);
 		if(piece!=NO_SQ && piece!=EMPTY && piece != OFFBOARD) {
 			ASSERT(piece>=PIECE_TYPE_WHITE_PAWN && piece<=PIECE_TYPE_BLACK_KING);
 			finalKey ^= g_pieceKeys[piece][squareIndex];
 		}		
 	}
 	
-	if(board->side == COLOR_TYPE_WHITE) {
+	if(board->getSide() == COLOR_TYPE_WHITE) {
 		finalKey ^= g_sideKey;
 	}
 		
-	if(board->enPas != NO_SQ) {
-		ASSERT(board->enPas>=0 && board->enPas<CHESS_BOARD_SQUARE_NUM);
-		ASSERT(SqOnBoard(board->enPas));
-		ASSERT(g_ranksBoard[board->enPas] == RANK_TYPE_3 || g_ranksBoard[board->enPas] == RANK_TYPE_6);
-		finalKey ^= g_pieceKeys[EMPTY][board->enPas];
+	if(board->getEnPassantSquare() != NO_SQ) {
+		ASSERT(board->getEnPassantSquare()>=0 && board->getEnPassantSquare()<CHESS_BOARD_SQUARE_NUM);
+		ASSERT(sqOnBoard(board->getEnPassantSquare()));
+		ASSERT(g_ranksBoard[board->getEnPassantSquare()] == RANK_TYPE_3 || g_ranksBoard[board->getEnPassantSquare()] == RANK_TYPE_6);
+		finalKey ^= g_pieceKeys[EMPTY][board->getEnPassantSquare()];
 	}
 	
-	ASSERT(board->castlePerm>=0 && board->castlePerm<=15);
+	ASSERT(board->getCastlePermission()>=0 && board->getCastlePermission()<=15);
 	
-	finalKey ^= g_castleKeys[board->castlePerm];
+	finalKey ^= g_castleKeys[board->getCastlePermission()];
 	
 	return finalKey;
 }

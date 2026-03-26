@@ -22,7 +22,7 @@
 #include "stdio.h"
 #include "types_definitions.h"
 
-char *PrSq(const int squareIndex) {
+char *prSq(const int squareIndex) {
 
 	static char SqStr[3];
 
@@ -35,7 +35,7 @@ char *PrSq(const int squareIndex) {
 
 }
 
-char *PrMove(const int move) {
+char *prMove(const int move) {
 
 	static char MvStr[6];
 
@@ -63,7 +63,7 @@ char *PrMove(const int move) {
 	return MvStr;
 }
 
-int Move_Parse(const char *ptrChar, ChessBoard *board) {
+int moveParse(const char *ptrChar, ChessBoard *board) {
 
 	ASSERT(board->check());
 
@@ -72,34 +72,34 @@ int Move_Parse(const char *ptrChar, ChessBoard *board) {
     if(ptrChar[0] > 'h' || ptrChar[0] < 'a') return NOMOVE;
     if(ptrChar[2] > 'h' || ptrChar[2] < 'a') return NOMOVE;
 
-    int from = FILE_RANK_TO_SQUARE(ptrChar[0] - 'a', ptrChar[1] - '1');
-    int to = FILE_RANK_TO_SQUARE(ptrChar[2] - 'a', ptrChar[3] - '1');
+    int from = fILERANKTOSQUARE(ptrChar[0] - 'a', ptrChar[1] - '1');
+    int to = fILERANKTOSQUARE(ptrChar[2] - 'a', ptrChar[3] - '1');
 
-	ASSERT(SqOnBoard(from) && SqOnBoard(to));
+	ASSERT(sqOnBoard(from) && sqOnBoard(to));
 
 	MoveList list[1];
-    Move_GenerateAll(board,list);
-    int MoveNum = 0;
-	int Move = 0;
+    moveGenerateAll(board,list);
+    int moveNum = 0;
+	int move = 0;
 	int promotedPiece = EMPTY;
 
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
-		Move = list->at(MoveNum).raw();
-		if(MOVE_GET_FROM_SQUARE(Move)==from && MOVE_GET_TO_SQUARE(Move)==to) {
-			promotedPiece = MOVE_GET_PROMOTED(Move);
+	for(moveNum = 0; moveNum < list->size(); ++moveNum) {
+		move = list->at(moveNum).raw();
+		if(MOVE_GET_FROM_SQUARE(move)==from && MOVE_GET_TO_SQUARE(move)==to) {
+			promotedPiece = MOVE_GET_PROMOTED(move);
 			if(promotedPiece!=EMPTY) {
 				if(PIECE_IS_ROOK_QUEEN(promotedPiece) && !PIECE_IS_BISHOP_QUEEN(promotedPiece) && ptrChar[4]=='r') {
-					return Move;
+					return move;
 				} else if(!PIECE_IS_ROOK_QUEEN(promotedPiece) && PIECE_IS_BISHOP_QUEEN(promotedPiece) && ptrChar[4]=='b') {
-					return Move;
+					return move;
 				} else if(PIECE_IS_ROOK_QUEEN(promotedPiece) && PIECE_IS_BISHOP_QUEEN(promotedPiece) && ptrChar[4]=='q') {
-					return Move;
+					return move;
 				} else if(PIECE_IS_KNIGHT(promotedPiece)&& ptrChar[4]=='n') {
-					return Move;
+					return move;
 				}
 				continue;
 			}
-			return Move;
+			return move;
 		}
     }
 
@@ -107,10 +107,10 @@ int Move_Parse(const char *ptrChar, ChessBoard *board) {
 }
 
 void MoveList::print() const {
-	PrintMoveList(this);
+	printMoveList(this);
 }
 
-void PrintMoveList(const MoveList *list) {
+void printMoveList(const MoveList *list) {
 	int index = 0;
 	int score = 0;
 	int move = 0;
@@ -121,7 +121,7 @@ void PrintMoveList(const MoveList *list) {
 		move = list->at(index).raw();
 		score = list->at(index).score();
 
-		printf("Move:%d > %s (score:%d)\n",index+1,PrMove(move),score);
+		printf("move:%d > %s (score:%d)\n",index+1,prMove(move),score);
 	}
 	printf("MoveList Total %d Moves:\n\n",list->size());
 }

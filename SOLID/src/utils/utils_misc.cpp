@@ -3,9 +3,9 @@
  * @brief Miscellaneous utility functions
  * 
  * Contains various utility functions:
- * - Time measurement (Misc_GetTimeMs)
- * - Input checking for GUI communication (InputWaiting)
- * - User input handling during search (Misc_ReadInput)
+ * - Time measurement (miscGetTimeMs)
+ * - Input checking for GUI communication (inputWaiting)
+ * - User input handling during search (miscReadInput)
  * 
  * These platform-specific functions handle timing and I/O
  * for communication with GUIs and managing search time limits.
@@ -27,9 +27,9 @@
 #include "string.h"
 #endif
 
-int Misc_GetTimeMs() {
+int RuntimeIOService::getTimeMs() {
 #ifdef _WIN32
-  return GetTickCount();
+  return getTickCount();
 #else
   struct timeval t;
   gettimeofday(&t, NULL);
@@ -39,7 +39,7 @@ int Misc_GetTimeMs() {
 
 
 // http://home.arcor.de/dreamlike/chess/
-int InputWaiting()
+int RuntimeIOService::isInputWaiting()
 {
 #ifndef _WIN32
   fd_set readfds;
@@ -74,12 +74,12 @@ int InputWaiting()
 #endif
 }
 
-void Misc_ReadInput(SearchInfo *info) {
+void RuntimeIOService::readInput(SearchInfo& info) {
   int             bytes;
   char            input[256] = "", *endc;
 
-    if (InputWaiting()) {
-		info->stopped = BOOL_TYPE_TRUE;
+    if (isInputWaiting()) {
+    info.stopped = BOOL_TYPE_TRUE;
 		do {
 		  bytes=read(fileno(stdin),input,256);
 		} while (bytes<0);
@@ -88,9 +88,23 @@ void Misc_ReadInput(SearchInfo *info) {
 
 		if (strlen(input) > 0) {
 			if (!strncmp(input, "quit", 4))    {
-			  info->quit = BOOL_TYPE_TRUE;
+        info.quit = BOOL_TYPE_TRUE;
 			}
 		}
 		return;
     }
+}
+
+int miscGetTimeMs() {
+  return RuntimeIOService::getTimeMs();
+}
+
+int inputWaiting()
+{
+  return RuntimeIOService::isInputWaiting();
+}
+
+void miscReadInput(SearchInfo *info) {
+  ASSERT(info != nullptr);
+  RuntimeIOService::readInput(*info);
 }

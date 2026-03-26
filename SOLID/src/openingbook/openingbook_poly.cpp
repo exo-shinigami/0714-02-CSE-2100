@@ -23,26 +23,40 @@
 #include "types_definitions.h"
 #include "openingbook_keys.h"
 #include <string.h>
-#include <windows.h>
+#include <vector>
 
-typedef struct {
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
+struct PolyBookEntry {
 	U64 key;
 	unsigned short move;
 	unsigned short weight;
 	unsigned int learn;
-	
-} S_POLY_BOOK_ENTRY;
+};
 
-long NumEntries = 0;
+class OpeningBookRepository {
+	std::vector<PolyBookEntry> entries_;
+public:
+	void init();
+	void clean();
+	int getMove(ChessBoard *board) const;
+};
 
-S_POLY_BOOK_ENTRY *entries;
+static OpeningBookRepository& getOpeningBookRepository() {
+	static OpeningBookRepository repository;
+	return repository;
+}
 
 const int PolyKindOfPiece[13] = {
 	-1, 1, 3, 5, 7, 9, 11, 0, 2, 4, 6, 8, 10
 };
 
-void PolyBook_Init() {
-
+void OpeningBookRepository::init() {
+	clean();
 	EngineOptions::instance().setBookEnabled(false);
 
 	char exePath[1024];
@@ -70,59 +84,57 @@ void PolyBook_Init() {
 		fseek(pFile,0,SEEK_END);
 		long position = ftell(pFile);
 
-		if(position < sizeof(S_POLY_BOOK_ENTRY)) {
+		if(position < (long)sizeof(PolyBookEntry)) {
 			printf("No Entries Found\n");
-			return;
-		}
-
-		NumEntries = position / sizeof(S_POLY_BOOK_ENTRY);
-		printf("%ld Entries Found In File\n", NumEntries);
-
-		entries = (S_POLY_BOOK_ENTRY*)malloc(NumEntries * sizeof(S_POLY_BOOK_ENTRY));
-		if (entries == NULL) {
-			printf("ERROR: Failed to allocate memory for opening book (%ld entries)\n", NumEntries);
 			fclose(pFile);
 			return;
 		}
+
+		const long numEntries = position / sizeof(PolyBookEntry);
+		printf("%ld Entries Found In File\n", numEntries);
+
+		entries_.resize(numEntries);
 		rewind(pFile);
 		
 		size_t returnValue;
-		returnValue = fread(entries, sizeof(S_POLY_BOOK_ENTRY), NumEntries, pFile);
-		printf("fread() %ld Entries Read in from file\n", returnValue);
+		returnValue = fread(entries_.data(), sizeof(PolyBookEntry), numEntries, pFile);
+		printf("fread() %zu Entries Read in from file\n", returnValue);
+		if (returnValue < entries_.size()) {
+			entries_.resize(returnValue);
+		}
 		
-		if(NumEntries > 0) {
+		if(!entries_.empty()) {
 			EngineOptions::instance().setBookEnabled(true);
 		}
+		fclose(pFile);
 	}
 }
 
-void PolyBook_Clean() {
-	if(entries != NULL) {
-		free(entries);
-		entries = NULL;
-	}
+void OpeningBookRepository::clean() {
+	entries_.clear();
+	entries_.shrink_to_fit();
 }
 
-int HasPawnForCapture(const ChessBoard *board) {
+int hasPawnForCapture(const ChessBoard *board) {
 	int sqWithPawn = 0;
-	int targetPce = (board->side == COLOR_TYPE_WHITE) ? PIECE_TYPE_WHITE_PAWN : PIECE_TYPE_BLACK_PAWN;
-	if(board->enPas != NO_SQ) {
-		if(board->side == COLOR_TYPE_WHITE) {
-			sqWithPawn = board->enPas - 10;
+	int targetPce = (board->getSide() == COLOR_TYPE_WHITE) ? PIECE_TYPE_WHITE_PAWN : PIECE_TYPE_BLACK_PAWN;
+	if(board->getEnPassantSquare() != NO_SQ) {
+		if(board->getSide() == COLOR_TYPE_WHITE) {
+			sqWithPawn = board->getEnPassantSquare() - 10;
 		} else {
-			sqWithPawn = board->enPas + 10;
+			sqWithPawn = board->getEnPassantSquare() + 10;
 		}
 		
-		if(board->pieces[sqWithPawn + 1] == targetPce) {
+		if(board->pieceAt(sqWithPawn + 1) == targetPce) {
 			return BOOL_TYPE_TRUE;
-		} else if(board->pieces[sqWithPawn - 1] == targetPce) {
+		} else if(board->pieceAt(sqWithPawn - 1) == targetPce) {
 			return BOOL_TYPE_TRUE;
 		} 
 	}
 	return BOOL_TYPE_FALSE;
 }
 
-U64 PolyKeyFromBoard(const ChessBoard *board) {
+U64 polyKeyFromBoard(const ChessBoard *board) {
 
 	int squareIndex = 0, rank = 0, file = 0;
 	U64 finalKey = 0;
@@ -131,7 +143,7 @@ U64 PolyKeyFromBoard(const ChessBoard *board) {
 	int offset = 0;
 	
 	for(squareIndex = 0; squareIndex < CHESS_BOARD_SQUARE_NUM; ++squareIndex) {
-		piece = board->pieces[squareIndex];
+		piece = board->pieceAt(squareIndex);
 		if(piece != NO_SQ && piece != EMPTY && piece != OFFBOARD) {
 			ASSERT(piece >= PIECE_TYPE_WHITE_PAWN && piece <= PIECE_TYPE_BLACK_KING);
 			polyPiece = PolyKindOfPiece[piece];
@@ -144,19 +156,19 @@ U64 PolyKeyFromBoard(const ChessBoard *board) {
 	// castling
 	offset = 768;
 	
-	if(board->castlePerm & CASTLE_TYPE_WKCA) finalKey ^= Random64Poly[offset + 0];
-	if(board->castlePerm & CASTLE_TYPE_WQCA) finalKey ^= Random64Poly[offset + 1];
-	if(board->castlePerm & CASTLE_TYPE_BKCA) finalKey ^= Random64Poly[offset + 2];
-	if(board->castlePerm & CASTLE_TYPE_BQCA) finalKey ^= Random64Poly[offset + 3];
+	if(board->getCastlePermission() & CASTLE_TYPE_WKCA) finalKey ^= Random64Poly[offset + 0];
+	if(board->getCastlePermission() & CASTLE_TYPE_WQCA) finalKey ^= Random64Poly[offset + 1];
+	if(board->getCastlePermission() & CASTLE_TYPE_BKCA) finalKey ^= Random64Poly[offset + 2];
+	if(board->getCastlePermission() & CASTLE_TYPE_BQCA) finalKey ^= Random64Poly[offset + 3];
 	
 	// enpassant
 	offset = 772;
-	if(HasPawnForCapture(board) == BOOL_TYPE_TRUE) {
-		file = g_filesBoard[board->enPas];
+	if(hasPawnForCapture(board) == BOOL_TYPE_TRUE) {
+		file = g_filesBoard[board->getEnPassantSquare()];
 		finalKey ^= Random64Poly[offset + file];
 	}
 	
-	if(board->side == COLOR_TYPE_WHITE) {
+	if(board->getSide() == COLOR_TYPE_WHITE) {
 		finalKey ^= Random64Poly[780];
 	}
 	return finalKey;
@@ -191,7 +203,7 @@ U64 endian_swap_u64(U64 x)
     return x;
 }
 
-int ConvertPolyMoveToInternalMove(unsigned short polyMove, ChessBoard *board) {
+int convertPolyMoveToInternalMove(unsigned short polyMove, ChessBoard *board) {
 	
 	int ff = (polyMove >> 6) & 7;
 	int fr = (polyMove >> 9) & 7;
@@ -202,10 +214,10 @@ int ConvertPolyMoveToInternalMove(unsigned short polyMove, ChessBoard *board) {
 	char moveString[6];
 	if(pp == 0) {
 		sprintf(moveString, "%c%c%c%c",
-		FileChar[ff],
-		RankChar[fr],
-		FileChar[tf],
-		RankChar[tr]);
+		fileChar[ff],
+		rankChar[fr],
+		fileChar[tf],
+		rankChar[tr]);
 	} else {
 		char promChar = 'q';
 		switch(pp) {
@@ -214,23 +226,21 @@ int ConvertPolyMoveToInternalMove(unsigned short polyMove, ChessBoard *board) {
 			case 3: promChar = 'r'; break;
 		}
 		sprintf(moveString, "%c%c%c%c%c",
-		FileChar[ff],
-		RankChar[fr],
-		FileChar[tf],
-		RankChar[tr],
+		fileChar[ff],
+		rankChar[fr],
+		fileChar[tf],
+		rankChar[tr],
 		promChar);
 	}
 	
-	return Move_Parse(moveString, board);
+	return moveParse(moveString, board);
 }
 
-int PolyBook_GetMove(ChessBoard *board) {
-	if(entries == NULL || NumEntries == 0) {
+int OpeningBookRepository::getMove(ChessBoard *board) const {
+	if(entries_.empty()) {
 		return NOMOVE;
 	}
 	
-	int index = 0;
-	S_POLY_BOOK_ENTRY *entry;
 	unsigned short move;
 	// Use a macro so it is a compile-time constant for array sizing
 	#define MAXBOOKMOVES 32
@@ -238,15 +248,15 @@ int PolyBook_GetMove(ChessBoard *board) {
 	int tempMove = NOMOVE;
 	int count = 0;
 	
-	U64 polyKey = PolyKeyFromBoard(board);
+	U64 polyKey = polyKeyFromBoard(board);
 	
-	for(entry = entries; entry < entries + NumEntries; entry++) {
-		if(polyKey == endian_swap_u64(entry->key)) {
-			move = endian_swap_u16(entry->move);
-			tempMove = ConvertPolyMoveToInternalMove(move, board);
+	for(const PolyBookEntry& entry : entries_) {
+		if(polyKey == endian_swap_u64(entry.key)) {
+			move = endian_swap_u16(entry.move);
+			tempMove = convertPolyMoveToInternalMove(move, board);
 			if(tempMove != NOMOVE) {
+				if(count >= MAXBOOKMOVES) break;
 				bookMoves[count++] = tempMove;
-				if(count > MAXBOOKMOVES) break;
 			}
 		}
 	}
@@ -257,6 +267,18 @@ int PolyBook_GetMove(ChessBoard *board) {
 	} else {
 		return NOMOVE;
 	}
+}
+
+void polyBookInit() {
+	getOpeningBookRepository().init();
+}
+
+void polyBookClean() {
+	getOpeningBookRepository().clean();
+}
+
+int polyBookGetMove(ChessBoard *board) {
+	return getOpeningBookRepository().getMove(board);
 }
 
 

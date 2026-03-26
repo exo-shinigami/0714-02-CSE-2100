@@ -1,6 +1,6 @@
 /**
  * @file move_history_tracker.h
- * @brief Move History Tracker - Manages move history display (SRP)
+ * @brief move History Tracker - Manages move history display (SRP)
  * 
  * This class follows Single Responsibility Principle by focusing only
  * on tracking and managing move history for display.

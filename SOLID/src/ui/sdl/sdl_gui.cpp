@@ -5,10 +5,10 @@
  * Implements a full-featured chess GUI using SDL2 and SDL2_TTF:
  * - Board rendering with proper square colors
  * - Piece rendering using Unicode chess symbols
- * - Move input via mouse clicks
- * - Move highlighting (selected square, legal moves)
+ * - move input via mouse clicks
+ * - move highlighting (selected square, legal moves)
  * - Captured pieces display
- * - Move history display
+ * - move history display
  * - Game timers (white and black)
  * - Promotion dialog
  * - Game over messages
@@ -27,10 +27,41 @@
 
 #include "sdl_gui.h"
 #include "types_definitions.h"
+#include "game_timer.h"
+#include "move_history_tracker.h"
+#include "gui_input_handler.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <string.h>
 #include <ctype.h>
+
+static void syncTimerStateFromComponent(GUI* gui) {
+    if (!gui) {
+        return;
+    }
+    gui->whiteTimeMs = gui->gameTimer.getWhiteTime();
+    gui->blackTimeMs = gui->gameTimer.getBlackTime();
+    gui->timerActive = gui->gameTimer.isActive() ? 1 : 0;
+    gui->timerPaused = gui->gameTimer.isPaused() ? 1 : 0;
+}
+
+static void syncHistoryStateFromComponent(GUI* gui) {
+    if (!gui) {
+        return;
+    }
+    gui->moveCount = gui->moveHistoryTracker.getMoveCount();
+    gui->historyScrollOffset = gui->moveHistoryTracker.getScrollOffset();
+}
+
+static void addIncrementForPreviousMover(GUI* gui, const ChessBoard* board) {
+    if (!gui || !board) {
+        return;
+    }
+    const int previousMover = board->getSide() ^ 1;
+    gui->gameTimer.addIncrement(previousMover);
+    syncTimerStateFromComponent(gui);
+    gui->lastMoveTime = miscGetTimeMs();
+}
 
 const char* GetPieceSymbol(int piece) {
     switch(piece) {
@@ -50,7 +81,7 @@ const char* GetPieceSymbol(int piece) {
     }
 }
 
-int GUI_Init(GUI* gui) {
+int gUIInit(GUI* gui) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 0;
@@ -124,10 +155,16 @@ int GUI_Init(GUI* gui) {
         gui->pieceTextures[i] = NULL;
     }
 
+    gui->moveHistoryTracker.clear();
+    gui->gameTimer.reset(DEFAULT_TIME_MS, DEFAULT_INCREMENT_MS);
+
+    syncHistoryStateFromComponent(gui);
+    syncTimerStateFromComponent(gui);
+
     return 1;
 }
 
-void CleanupGUI(GUI* gui) {
+void cleanupGUI(GUI* gui) {
     if (!gui) return;  // Safety check for null pointer
     
     // Clean up piece textures if they exist
@@ -150,7 +187,7 @@ void CleanupGUI(GUI* gui) {
     SDL_Quit();
 }
 
-void RenderGameOverMessage(GUI* gui) {
+void renderGameOverMessage(GUI* gui) {
     if (!gui->gameOver) return;
     
     // Create a semi-transparent overlay
@@ -208,7 +245,7 @@ void RenderGameOverMessage(GUI* gui) {
     TTF_CloseFont(font);
 }
 
-void RenderGameMode(GUI* gui) {
+void renderGameMode(GUI* gui) {
     // Load font for mode display
     TTF_Font* font = TTF_OpenFont("C:/Windows/Fonts/arial.ttf", 18);
     if (!font) {
@@ -257,39 +294,39 @@ void RenderGameMode(GUI* gui) {
     TTF_CloseFont(font);
 }
 
-void SetGameOver(GUI* gui, ChessBoard* board) {
+void setGameOver(GUI* gui, ChessBoard* board) {
     gui->gameOver = 1;
     
     // Check for different types of draws first
-    if (board->fiftyMove > 100) {
-        strcpy(gui->gameOverMessage, "DRAW! Fifty Move Rule");
-        printf("DEBUG: Setting message - DRAW! Fifty Move Rule\n");
+    if (board->getFiftyMoveCounter() > 100) {
+        strcpy(gui->gameOverMessage, "DRAW! Fifty move Rule");
+        printf("DEBUG: Setting message - DRAW! Fifty move Rule\n");
         return;
     }
     
-    if (ThreeFoldRep(board) >= 2) {
+    if (threeFoldRep(board) >= 2) {
         strcpy(gui->gameOverMessage, "DRAW! Threefold Repetition");
         printf("DEBUG: Setting message - DRAW! Threefold Repetition\n");
         return;
     }
     
-    if (DrawMaterial(board) == BOOL_TYPE_TRUE) {
+    if (drawMaterial(board) == BOOL_TYPE_TRUE) {
         strcpy(gui->gameOverMessage, "DRAW! Insufficient Material");
         printf("DEBUG: Setting message - DRAW! Insufficient Material\n");
         return;
     }
     
     // Determine the game over message based on the current position
-    int InCheck = board->isSquareAttacked(board->KingSq[board->side], board->side^1);
+        int inCheck = board->isSquareAttacked(board->getKingSquare(board->getSide()), board->getSide() ^ 1);
     
-    printf("DEBUG GAME OVER: side=%s, InCheck=%d, KingSq=%s\n", 
-           board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", 
-           InCheck, 
-           PrSq(board->KingSq[board->side]));
+    printf("DEBUG GAME OVER: side=%s, inCheck=%d, kingSq=%s\n", 
+            board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", 
+           inCheck, 
+            prSq(board->getKingSquare(board->getSide())));
     
-    if (InCheck) {
+    if (inCheck) {
         // Checkmate
-        if (board->side == COLOR_TYPE_WHITE) {
+        if (board->getSide() == COLOR_TYPE_WHITE) {
             strcpy(gui->gameOverMessage, "CHECKMATE! Black Wins!");
             printf("DEBUG: Setting message - CHECKMATE! Black Wins!\n");
         } else {
@@ -303,8 +340,8 @@ void SetGameOver(GUI* gui, ChessBoard* board) {
     }
 }
 
-int IsPawnPromotion(ChessBoard* board, int fromSq, int toSq) {
-    int piece = board->pieces[fromSq];
+int isPawnPromotion(ChessBoard* board, int fromSq, int toSq) {
+    int piece = board->pieceAt(fromSq);
     
     // Check if it's a pawn
     if (!g_piecePawn[piece]) return 0;
@@ -317,14 +354,13 @@ int IsPawnPromotion(ChessBoard* board, int fromSq, int toSq) {
     return 0;
 }
 
-char GetPromotionChoice() {
+char getPromotionChoice() {
     // For now, default to Queen promotion to test the system
-    // TODO: Replace with proper GUI dialog
     printf("PAWN PROMOTION: Automatically promoting to Queen\n");
     return 'q';
 }
 
-void RenderPromotionDialog(GUI* gui, ChessBoard* board) {
+void renderPromotionDialog(GUI* gui, ChessBoard* board) {
     // Semi-transparent overlay
     SDL_SetRenderDrawBlendMode(gui->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(gui->renderer, 0, 0, 0, 200);
@@ -362,7 +398,7 @@ void RenderPromotionDialog(GUI* gui, ChessBoard* board) {
     }
     
     // Determine which color pieces to show
-    int isWhite = (board->side == COLOR_TYPE_BLACK); // After move, side switches, so we check opposite
+    int isWhite = (board->getSide() == COLOR_TYPE_BLACK); // After move, side switches, so we check opposite
     
     // Draw 4 piece options (Queen, Rook, Bishop, Knight)
     int pieceSize = 80;
@@ -436,7 +472,7 @@ void RenderPromotionDialog(GUI* gui, ChessBoard* board) {
     }
 }
 
-char GUI_HandlePromotionClick(GUI* gui, int mouseX, int mouseY) {
+char gUIHandlePromotionClick(GUI* gui, int mouseX, int mouseY) {
     int dialogW = 400;
     int dialogH = 250;
     int dialogX = (WINDOW_WIDTH - dialogW) / 2;
@@ -459,42 +495,23 @@ char GUI_HandlePromotionClick(GUI* gui, int mouseX, int mouseY) {
     return '\0'; // No selection
 }
 
-int SquareFromCoords(int x, int y) {
-    // Enhanced bounds checking
-    if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+int squareFromCoords(int x, int y) {
+    GUIInputHandler inputHandler;
+    if (!inputHandler.isInBoardArea(x, y)) {
         return NO_SQ;
     }
-    
-    int file = x / SQUARE_SIZE;
-    int rank = 7 - (y / SQUARE_SIZE);
-    
-    // Additional safety check for file and rank bounds
-    if (file < 0 || file > 7 || rank < 0 || rank > 7) {
-        return NO_SQ;
-    }
-    
-    return FILE_RANK_TO_SQUARE(file, rank);
+
+    const int file = x / SQUARE_SIZE;
+    const int rank = 7 - (y / SQUARE_SIZE);
+    return fILERANKTOSQUARE(file, rank);
 }
 
-void GetSquareCoords(int square, int* x, int* y) {
-    // Safety check for null pointers
-    if (!x || !y) return;
-    
-    // Safety check for valid square
-    if (square == NO_SQ || square < 0 || square >= 120) {
-        *x = 0;
-        *y = 0;
-        return;
-    }
-    
-    int file = g_filesBoard[square];
-    int rank = g_ranksBoard[square];
-    
-    *x = file * SQUARE_SIZE;
-    *y = (7 - rank) * SQUARE_SIZE;
+void getSquareCoords(int square, int* x, int* y) {
+    GUIInputHandler inputHandler;
+    inputHandler.getSquareCoords(square, x, y);
 }
 
-void GUI_DrawPiece(GUI* gui, int piece, int x, int y) {
+void gUIDrawPiece(GUI* gui, int piece, int x, int y) {
     // Safety check for piece bounds
     if (piece == EMPTY || piece == OFFBOARD || piece < 0 || piece >= 13) {
         return;
@@ -548,7 +565,7 @@ void GUI_DrawPiece(GUI* gui, int piece, int x, int y) {
     TTF_CloseFont(font);
 }
 
-void DrawCapturedPiece(GUI* gui, int piece, int x, int y, int size) {
+void drawCapturedPiece(GUI* gui, int piece, int x, int y, int size) {
     // Safety check for piece bounds
     if (piece == EMPTY || piece == OFFBOARD || piece < 0 || piece >= 13) {
         return;
@@ -602,7 +619,7 @@ void DrawCapturedPiece(GUI* gui, int piece, int x, int y, int size) {
     TTF_CloseFont(font);
 }
 
-void RenderCapturedPieces(GUI* gui) {
+void renderCapturedPieces(GUI* gui) {
     int panelX = BOARD_SIZE;
     
     // Draw panel background
@@ -659,7 +676,7 @@ void RenderCapturedPieces(GUI* gui) {
     for (int i = 0; i < gui->capturedBlackCount; i++) {
         int piece = gui->capturedBlack[i];
         if (piece != EMPTY && piece >= PIECE_TYPE_BLACK_PAWN && piece <= PIECE_TYPE_BLACK_KING) {
-            DrawCapturedPiece(gui, piece, blackColumnX, blackY, CAPTURED_PIECE_SIZE);
+            drawCapturedPiece(gui, piece, blackColumnX, blackY, CAPTURED_PIECE_SIZE);
             blackY += CAPTURED_PIECE_SIZE + CAPTURED_PIECE_PADDING;
             // Prevent overflow
             if (blackY + CAPTURED_PIECE_SIZE > BOARD_SIZE - 10) break;
@@ -685,7 +702,7 @@ void RenderCapturedPieces(GUI* gui) {
     for (int i = 0; i < gui->capturedWhiteCount; i++) {
         int piece = gui->capturedWhite[i];
         if (piece != EMPTY && piece >= PIECE_TYPE_WHITE_PAWN && piece <= PIECE_TYPE_WHITE_KING) {
-            DrawCapturedPiece(gui, piece, whiteColumnX, whiteY, CAPTURED_PIECE_SIZE);
+            drawCapturedPiece(gui, piece, whiteColumnX, whiteY, CAPTURED_PIECE_SIZE);
             whiteY += CAPTURED_PIECE_SIZE + CAPTURED_PIECE_PADDING;
             // Prevent overflow
             if (whiteY + CAPTURED_PIECE_SIZE > BOARD_SIZE - 10) break;
@@ -697,52 +714,52 @@ void RenderCapturedPieces(GUI* gui) {
     }
 }
 
-void AddMoveToHistory(GUI* gui, const char* moveStr) {
-    if (gui->moveCount < MAX_DISPLAY_MOVES) {
+void addMoveToHistory(GUI* gui, const char* moveStr) {
+    if (!moveStr) {
+        return;
+    }
+
+    gui->moveHistoryTracker.addMove(moveStr);
+    syncHistoryStateFromComponent(gui);
+    const int index = gui->moveCount - 1;
+    if (index >= 0 && index < MAX_DISPLAY_MOVES) {
+        strncpy(gui->moveHistory[index], moveStr, 9);
+        gui->moveHistory[index][9] = '\0';
+    } else if (gui->moveCount < MAX_DISPLAY_MOVES) {
         strncpy(gui->moveHistory[gui->moveCount], moveStr, 9);
         gui->moveHistory[gui->moveCount][9] = '\0';
         gui->moveCount++;
     }
 }
 
-void ResetTimers(GUI* gui) {
-    gui->whiteTimeMs = DEFAULT_TIME_MS;
-    gui->blackTimeMs = DEFAULT_TIME_MS;
-    gui->lastMoveTime = Misc_GetTimeMs();
-    gui->timerActive = 1;
-    gui->timerPaused = 0;
+void resetTimers(GUI* gui) {
+    gui->gameTimer.reset(DEFAULT_TIME_MS, gui->incrementMs);
+    gui->gameTimer.start();
+    syncTimerStateFromComponent(gui);
+    gui->lastMoveTime = miscGetTimeMs();
 }
 
-void UpdateTimer(GUI* gui, ChessBoard* board) {
-    if (!gui->timerActive || gui->timerPaused || gui->gameOver) {
+void updateTimer(GUI* gui, ChessBoard* board) {
+    if (gui->gameOver) {
         return;
     }
-    
-    int currentTime = Misc_GetTimeMs();
-    int elapsed = currentTime - gui->lastMoveTime;
-    gui->lastMoveTime = currentTime;
-    
-    // Deduct time from the side to move
-    if (board->side == COLOR_TYPE_WHITE) {
-        gui->whiteTimeMs -= elapsed;
-        if (gui->whiteTimeMs < 0) {
-            gui->whiteTimeMs = 0;
-            gui->gameOver = 1;
-            strcpy(gui->gameOverMessage, "TIME OUT! Black Wins!");
-            gui->timerActive = 0;
-        }
-    } else {
-        gui->blackTimeMs -= elapsed;
-        if (gui->blackTimeMs < 0) {
-            gui->blackTimeMs = 0;
-            gui->gameOver = 1;
-            strcpy(gui->gameOverMessage, "TIME OUT! White Wins!");
-            gui->timerActive = 0;
-        }
+
+    if (!gui->gameTimer.isActive()) {
+        return;
+    }
+    gui->gameTimer.update(board->getSide());
+    syncTimerStateFromComponent(gui);
+
+    if (gui->gameTimer.hasWhiteTimedOut()) {
+        gui->gameOver = 1;
+        strcpy(gui->gameOverMessage, "TIME OUT! Black Wins!");
+    } else if (gui->gameTimer.hasBlackTimedOut()) {
+        gui->gameOver = 1;
+        strcpy(gui->gameOverMessage, "TIME OUT! White Wins!");
     }
 }
 
-void RenderTimers(GUI* gui, ChessBoard* board) {
+void renderTimers(GUI* gui, ChessBoard* board) {
     TTF_Font* font = TTF_OpenFont("C:/Windows/Fonts/arial.ttf", 24);
     if (!font) {
         font = TTF_OpenFont("C:/Windows/Fonts/calibri.ttf", 24);
@@ -768,7 +785,7 @@ void RenderTimers(GUI* gui, ChessBoard* board) {
     SDL_RenderFillRect(gui->renderer, &blackTimerBox);
     
     // Highlight active player's timer
-    if (board->side == COLOR_TYPE_WHITE) {
+    if (board->getSide() == COLOR_TYPE_WHITE) {
         SDL_SetRenderDrawColor(gui->renderer, 100, 200, 100, 255);
         SDL_RenderDrawRect(gui->renderer, &whiteTimerBox);
         SDL_Rect whiteBorderRect = {whiteTimerBox.x - 1, whiteTimerBox.y - 1, whiteTimerBox.w + 2, whiteTimerBox.h + 2};
@@ -783,13 +800,8 @@ void RenderTimers(GUI* gui, ChessBoard* board) {
     // Format time strings (MM:SS)
     char whiteTimeStr[16];
     char blackTimeStr[16];
-    int whiteMinutes = gui->whiteTimeMs / 60000;
-    int whiteSeconds = (gui->whiteTimeMs % 60000) / 1000;
-    int blackMinutes = gui->blackTimeMs / 60000;
-    int blackSeconds = (gui->blackTimeMs % 60000) / 1000;
-    
-    snprintf(whiteTimeStr, sizeof(whiteTimeStr), "%02d:%02d", whiteMinutes, whiteSeconds);
-    snprintf(blackTimeStr, sizeof(blackTimeStr), "%02d:%02d", blackMinutes, blackSeconds);
+    gui->gameTimer.formatTime(gui->whiteTimeMs, whiteTimeStr, sizeof(whiteTimeStr));
+    gui->gameTimer.formatTime(gui->blackTimeMs, blackTimeStr, sizeof(blackTimeStr));
     
     // Render White timer
     SDL_Color whiteColor = {255, 255, 255, 255};
@@ -849,7 +861,7 @@ void RenderTimers(GUI* gui, ChessBoard* board) {
     }
 }
 
-void RenderMoveHistory(GUI* gui, ChessBoard* board) {
+void renderMoveHistory(GUI* gui, ChessBoard* board) {
     int panelX = BOARD_SIZE + CAPTURED_PANEL_WIDTH;
     
     // Draw panel background
@@ -870,7 +882,7 @@ void RenderMoveHistory(GUI* gui, ChessBoard* board) {
     
     // Render title
     SDL_Color titleColor = {255, 255, 255, 255};
-    SDL_Surface* titleSurface = TTF_RenderText_Solid(font, "Move History", titleColor);
+    SDL_Surface* titleSurface = TTF_RenderText_Solid(font, "move History", titleColor);
     if (titleSurface) {
         SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(gui->renderer, titleSurface);
         if (titleTexture) {
@@ -921,13 +933,13 @@ void RenderMoveHistory(GUI* gui, ChessBoard* board) {
     TTF_CloseFont(font);
 }
 
-void GUI_RenderBoard(GUI* gui, ChessBoard* board) {
+void gUIRenderBoard(GUI* gui, ChessBoard* board) {
     SDL_SetRenderDrawColor(gui->renderer, 50, 50, 50, 255);
     SDL_RenderClear(gui->renderer);
     
     // Check if king is in check
-    int kingInCheck = board->isSquareAttacked(board->KingSq[board->side], board->side^1);
-    int kingSquare = board->KingSq[board->side];
+    int kingInCheck = board->isSquareAttacked(board->getKingSquare(board->getSide()), board->getSide() ^ 1);
+    int kingSquare = board->getKingSquare(board->getSide());
     
     // Draw board squares
     for (int rank = 0; rank < 8; rank++) {
@@ -937,7 +949,7 @@ void GUI_RenderBoard(GUI* gui, ChessBoard* board) {
             
             SDL_Rect square = {x, y, SQUARE_SIZE, SQUARE_SIZE};
             
-            int sq120 = FILE_RANK_TO_SQUARE(file, 7 - rank);
+            int sq120 = fILERANKTOSQUARE(file, 7 - rank);
             
             // Determine square color
             if ((file + rank) % 2 == 0) {
@@ -978,8 +990,8 @@ void GUI_RenderBoard(GUI* gui, ChessBoard* board) {
             SDL_SetRenderDrawBlendMode(gui->renderer, SDL_BLENDMODE_NONE);
             
             // Draw piece if present
-            if (board->pieces[sq120] != EMPTY && board->pieces[sq120] != OFFBOARD) {
-                GUI_DrawPiece(gui, board->pieces[sq120], x, y);
+            if (board->pieceAt(sq120) != EMPTY && board->pieceAt(sq120) != OFFBOARD) {
+                gUIDrawPiece(gui, board->pieceAt(sq120), x, y);
             }
         }
     }
@@ -992,10 +1004,10 @@ void GUI_RenderBoard(GUI* gui, ChessBoard* board) {
     }
     
     // Draw captured pieces panel
-    RenderCapturedPieces(gui);
+    renderCapturedPieces(gui);
     
     // Draw move history panel
-    RenderMoveHistory(gui, board);
+    renderMoveHistory(gui, board);
     
     // Draw status text area
     SDL_SetRenderDrawColor(gui->renderer, 30, 30, 30, 255);
@@ -1003,28 +1015,28 @@ void GUI_RenderBoard(GUI* gui, ChessBoard* board) {
     SDL_RenderFillRect(gui->renderer, &statusArea);
     
     // Draw timers
-    RenderTimers(gui, board);
+    renderTimers(gui, board);
     
     // Draw game mode and controls
-    RenderGameMode(gui);
+    renderGameMode(gui);
     
     // Draw game over message if applicable
-    RenderGameOverMessage(gui);
+    renderGameOverMessage(gui);
     
     // Draw promotion dialog if pending
     if (gui->promotionPending) {
-        RenderPromotionDialog(gui, board);
+        renderPromotionDialog(gui, board);
     }
     
     SDL_RenderPresent(gui->renderer);
 }
 
-void CalculatePossibleMoves(GUI* gui, ChessBoard* board, int fromSquare) {
+void calculatePossibleMoves(GUI* gui, ChessBoard* board, int fromSquare) {
     gui->possibleMovesCount = 0;
     
     // Generate all legal moves
     MoveList list[1];
-    Move_GenerateAll(board, list);
+    moveGenerateAll(board, list);
     
     // Filter moves that start from the selected square
     for (int i = 0; i < list->size(); i++) {
@@ -1045,7 +1057,7 @@ void CalculatePossibleMoves(GUI* gui, ChessBoard* board, int fromSquare) {
     }
 }
 
-static void GUI_TrackCapture(GUI* gui, int move) {
+static void gUITrackCapture(GUI* gui, int move) {
     int captured = MOVE_GET_CAPTURED(move);
     if (captured == EMPTY) return;
     if (captured >= PIECE_TYPE_WHITE_PAWN && captured <= PIECE_TYPE_WHITE_KING) {
@@ -1055,25 +1067,25 @@ static void GUI_TrackCapture(GUI* gui, int move) {
     }
 }
 
-void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, int y, const IEvaluator& eval) {
+void gUIHandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, int y, const IEvaluator& eval) {
     // Handle promotion dialog click
     if (gui->promotionPending) {
-        char choice = GUI_HandlePromotionClick(gui, x, y);
+        char choice = gUIHandlePromotionClick(gui, x, y);
         if (choice != '\0') {
             // Build the promotion move string
             char moveStr[8];
             snprintf(moveStr, sizeof(moveStr), "%c%c%c%c%c", 
-                   FileChar[g_filesBoard[gui->promotionFromSq]], 
-                   RankChar[g_ranksBoard[gui->promotionFromSq]],
-                   FileChar[g_filesBoard[gui->promotionToSq]], 
-                   RankChar[g_ranksBoard[gui->promotionToSq]],
+                   fileChar[g_filesBoard[gui->promotionFromSq]], 
+                   rankChar[g_ranksBoard[gui->promotionFromSq]],
+                   fileChar[g_filesBoard[gui->promotionToSq]], 
+                   rankChar[g_ranksBoard[gui->promotionToSq]],
                    choice);
             
             printf("Pawn promotion move: %s\n", moveStr);
             
-            int move = Move_Parse(moveStr, board);
+            int move = moveParse(moveStr, board);
             if (move != NOMOVE && board->makeMove(move)) {
-                GUI_TrackCapture(gui, move);
+                gUITrackCapture(gui, move);
                 gui->promotionPending = 0;
                 gui->promotionFromSq = NO_SQ;
                 gui->promotionToSq = NO_SQ;
@@ -1081,30 +1093,24 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                 gui->possibleMovesCount = 0;
                 
                 // Add move to history
-                AddMoveToHistory(gui, moveStr);
+                addMoveToHistory(gui, moveStr);
                 
                 // Timer handling
-                if (!gui->timerActive) {
-                    gui->timerActive = 1;
-                    gui->lastMoveTime = Misc_GetTimeMs();
+                if (!gui->gameTimer.isActive()) {
+                    gui->gameTimer.start();
                 }
-                if (board->side == COLOR_TYPE_WHITE) {
-                    gui->blackTimeMs += gui->incrementMs;
-                } else {
-                    gui->whiteTimeMs += gui->incrementMs;
-                }
-                gui->lastMoveTime = Misc_GetTimeMs();
+                addIncrementForPreviousMover(gui, board);
                 
                 // Check for game over
                 if (checkresult(board) == BOOL_TYPE_TRUE) {
-                    SetGameOver(gui, board);
+                    setGameOver(gui, board);
                     return;
                 }
                 
                 // Engine move in PvE mode
                 if (gui->gameMode == MODE_PVE) {
                     MoveList list[1];
-                    Move_GenerateAll(board, list);
+                    moveGenerateAll(board, list);
                     
                     int engineMove = NOMOVE;
                     int bestScore = -999999;
@@ -1125,20 +1131,15 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                     
                     if (engineMove != NOMOVE) {
                         char engineMoveStr[10];
-                        snprintf(engineMoveStr, sizeof(engineMoveStr), "%s", PrMove(engineMove));
-                        AddMoveToHistory(gui, engineMoveStr);
+                        snprintf(engineMoveStr, sizeof(engineMoveStr), "%s", prMove(engineMove));
+                        addMoveToHistory(gui, engineMoveStr);
                         board->makeMove(engineMove);
-                        GUI_TrackCapture(gui, engineMove);
+                        gUITrackCapture(gui, engineMove);
                         
-                        if (board->side == COLOR_TYPE_WHITE) {
-                            gui->blackTimeMs += gui->incrementMs;
-                        } else {
-                            gui->whiteTimeMs += gui->incrementMs;
-                        }
-                        gui->lastMoveTime = Misc_GetTimeMs();
+                        addIncrementForPreviousMover(gui, board);
                         
                         if (checkresult(board) == BOOL_TYPE_TRUE) {
-                            SetGameOver(gui, board);
+                            setGameOver(gui, board);
                         }
                     }
                 }
@@ -1156,40 +1157,40 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
     // Check for checkmate/stalemate at the start of each turn
     printf("DEBUG: Checking game status with checkresult()...\n");
     if (checkresult(board) == BOOL_TYPE_TRUE) {
-        SetGameOver(gui, board);
+        setGameOver(gui, board);
         printf("*** GAME OVER - No legal moves available ***\n");
         return;
     }
     printf("DEBUG: checkresult() returned BOOL_TYPE_FALSE - game continues\n");
     
-    int clickedSquare = SquareFromCoords(x, y);
+    int clickedSquare = squareFromCoords(x, y);
     
     if (clickedSquare == NO_SQ) return;
     
     printf("\n=== MOUSE CLICK DEBUG ===\n");
     printf("Mouse coords: (%d, %d)\n", x, y);
-    printf("Clicked square: %s (sq120: %d)\n", PrSq(clickedSquare), clickedSquare);
-    printf("Current side to move: %s (%d)\n", board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->side);
-    printf("Selected square: %s\n", gui->selectedSquare == NO_SQ ? "NONE" : PrSq(gui->selectedSquare));
+    printf("Clicked square: %s (sq120: %d)\n", prSq(clickedSquare), clickedSquare);
+    printf("Current side to move: %s (%d)\n", board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->getSide());
+    printf("Selected square: %s\n", gui->selectedSquare == NO_SQ ? "NONE" : prSq(gui->selectedSquare));
     
     if (gui->selectedSquare == NO_SQ) {
         // Select a piece
-        if (board->pieces[clickedSquare] != EMPTY && board->pieces[clickedSquare] != OFFBOARD) {
+        if (board->pieceAt(clickedSquare) != EMPTY && board->pieceAt(clickedSquare) != OFFBOARD) {
             // Check if it's the right color to move
-            int piece = board->pieces[clickedSquare];
-            printf("Piece at square: %d (%c), side to move: %d\n", piece, PceChar[piece], board->side);
+            int piece = board->pieceAt(clickedSquare);
+            printf("Piece at square: %d (%c), side to move: %d\n", piece, pceChar[piece], board->getSide());
             printf("Piece color check: COLOR_TYPE_WHITE pieces %d-%d, COLOR_TYPE_BLACK pieces %d-%d\n", PIECE_TYPE_WHITE_PAWN, PIECE_TYPE_WHITE_KING, PIECE_TYPE_BLACK_PAWN, PIECE_TYPE_BLACK_KING);
             
-            if ((board->side == COLOR_TYPE_WHITE && piece >= PIECE_TYPE_WHITE_PAWN && piece <= PIECE_TYPE_WHITE_KING) ||
-                (board->side == COLOR_TYPE_BLACK && piece >= PIECE_TYPE_BLACK_PAWN && piece <= PIECE_TYPE_BLACK_KING)) {
+            if ((board->getSide() == COLOR_TYPE_WHITE && piece >= PIECE_TYPE_WHITE_PAWN && piece <= PIECE_TYPE_WHITE_KING) ||
+                (board->getSide() == COLOR_TYPE_BLACK && piece >= PIECE_TYPE_BLACK_PAWN && piece <= PIECE_TYPE_BLACK_KING)) {
                 gui->selectedSquare = clickedSquare;
-                CalculatePossibleMoves(gui, board, clickedSquare);
-                printf("✓ Selected piece %c at %s with %d possible moves\n", PceChar[piece], PrSq(clickedSquare), gui->possibleMovesCount);
+                calculatePossibleMoves(gui, board, clickedSquare);
+                printf("✓ Selected piece %c at %s with %d possible moves\n", pceChar[piece], prSq(clickedSquare), gui->possibleMovesCount);
             } else {
-                printf("✗ Wrong color piece (piece=%d, side=%d) or not your turn\n", piece, board->side);
+                printf("✗ Wrong color piece (piece=%d, side=%d) or not your turn\n", piece, board->getSide());
             }
         } else {
-            printf("✗ No piece at clicked square (piece=%d)\n", board->pieces[clickedSquare]);
+            printf("✗ No piece at clicked square (piece=%d)\n", board->pieceAt(clickedSquare));
         }
     } else {
         // Try to make a move
@@ -1203,7 +1204,7 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
             char moveStr[8];
             
             // Check if this is a pawn promotion
-            if (IsPawnPromotion(board, gui->selectedSquare, clickedSquare)) {
+            if (isPawnPromotion(board, gui->selectedSquare, clickedSquare)) {
                 // Set up promotion dialog
                 gui->promotionPending = 1;
                 gui->promotionFromSq = gui->selectedSquare;
@@ -1214,46 +1215,38 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
             
             // Build move string
             snprintf(moveStr, sizeof(moveStr), "%c%c%c%c", 
-                   FileChar[g_filesBoard[gui->selectedSquare]], 
-                   RankChar[g_ranksBoard[gui->selectedSquare]],
-                   FileChar[g_filesBoard[clickedSquare]], 
-                   RankChar[g_ranksBoard[clickedSquare]]);
+                   fileChar[g_filesBoard[gui->selectedSquare]], 
+                   rankChar[g_ranksBoard[gui->selectedSquare]],
+                   fileChar[g_filesBoard[clickedSquare]], 
+                   rankChar[g_ranksBoard[clickedSquare]]);
             
-            printf("Attempting move: %s (from %s to %s)\n", moveStr, PrSq(gui->selectedSquare), PrSq(clickedSquare));
-            printf("Side before move: %s (%d)\n", board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->side);
+            printf("Attempting move: %s (from %s to %s)\n", moveStr, prSq(gui->selectedSquare), prSq(clickedSquare));
+            printf("Side before move: %s (%d)\n", board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->getSide());
             
-            int move = Move_Parse(moveStr, board);
+            int move = moveParse(moveStr, board);
             if (move != NOMOVE) {
                 printf("✓ Valid move found (moveInt=%d), making move...\n", move);
-                printf("DEBUG: Before Move_Make - side=%d (%s)\n", board->side, board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK");
+                printf("DEBUG: Before Move_Make - side=%d (%s)\n", board->getSide(), board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK");
                 int makeMovResult = board->makeMove(move);
                 printf("DEBUG: Move_Make returned: %d\n", makeMovResult);
-                printf("DEBUG: After Move_Make - side=%d (%s)\n", board->side, board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK");
+                printf("DEBUG: After Move_Make - side=%d (%s)\n", board->getSide(), board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK");
                 
                 if (makeMovResult) {
-                    GUI_TrackCapture(gui, move);
-                    printf("Side after user move: %s (%d)\n", board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->side);
+                    gUITrackCapture(gui, move);
+                    printf("Side after user move: %s (%d)\n", board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->getSide());
                     gui->selectedSquare = NO_SQ;
                     gui->possibleMovesCount = 0;
                     
                     // Start timer on first move
-                    if (!gui->timerActive) {
-                        gui->timerActive = 1;
-                        gui->lastMoveTime = Misc_GetTimeMs();
+                    if (!gui->gameTimer.isActive()) {
+                        gui->gameTimer.start();
                     }
                     
                     // Add move to history
-                    AddMoveToHistory(gui, moveStr);
+                    addMoveToHistory(gui, moveStr);
                     
                     // Add increment to previous player's time
-                    if (board->side == COLOR_TYPE_WHITE) {
-                        // Black just moved
-                        gui->blackTimeMs += gui->incrementMs;
-                    } else {
-                        // White just moved
-                        gui->whiteTimeMs += gui->incrementMs;
-                    }
-                    gui->lastMoveTime = Misc_GetTimeMs();
+                    addIncrementForPreviousMover(gui, board);
                 
                     // Check board validity
                     if (!board->check()) {
@@ -1264,8 +1257,8 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                     // Check for checkmate/stalemate after user move
                     printf("DEBUG: About to call checkresult after move...\n");
                     if (checkresult(board) == BOOL_TYPE_TRUE) {
-                        printf("DEBUG: checkresult returned BOOL_TYPE_TRUE - calling SetGameOver\n");
-                        SetGameOver(gui, board);
+                        printf("DEBUG: checkresult returned BOOL_TYPE_TRUE - calling setGameOver\n");
+                        setGameOver(gui, board);
                         printf("*** GAME OVER ***\n");
                         return; // Game has ended
                     }
@@ -1274,10 +1267,10 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                     // Only let engine move in PvE mode
                     if (gui->gameMode == MODE_PVE) {
                         // Engine vs Player mode - let engine make a move
-                        if (board->side == COLOR_TYPE_WHITE || board->side == COLOR_TYPE_BLACK) {
+                        if (board->getSide() == COLOR_TYPE_WHITE || board->getSide() == COLOR_TYPE_BLACK) {
                             // Generate all legal moves
                             MoveList list[1];
-                            Move_GenerateAll(board, list);
+                            moveGenerateAll(board, list);
                             
                             // Pick the best move using simple evaluation (instant)
                             int engineMove = NOMOVE;
@@ -1304,31 +1297,24 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                             
                             // Make the engine's move if it found one
                             if (engineMove != NOMOVE) {
-                                printf("Engine found move: %s\n", PrMove(engineMove));
+                                printf("Engine found move: %s\n", prMove(engineMove));
                                 
                                 // Add engine move to history
                                 char engineMoveStr[10];
-                                snprintf(engineMoveStr, sizeof(engineMoveStr), "%s", PrMove(engineMove));
-                                AddMoveToHistory(gui, engineMoveStr);
+                                snprintf(engineMoveStr, sizeof(engineMoveStr), "%s", prMove(engineMove));
+                                addMoveToHistory(gui, engineMoveStr);
                                 
                                 board->makeMove(engineMove);
-                                GUI_TrackCapture(gui, engineMove);
-                                printf("✓ Engine played: %s\n", PrMove(engineMove));
-                                printf("Side after engine move: %s (%d)\n", board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->side);
+                                gUITrackCapture(gui, engineMove);
+                                printf("✓ Engine played: %s\n", prMove(engineMove));
+                                printf("Side after engine move: %s (%d)\n", board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK", board->getSide());
                                 
                                 // Add increment to engine's time
-                                if (board->side == COLOR_TYPE_WHITE) {
-                                    // Black (engine) just moved
-                                    gui->blackTimeMs += gui->incrementMs;
-                                } else {
-                                    // White (engine) just moved
-                                    gui->whiteTimeMs += gui->incrementMs;
-                                }
-                                gui->lastMoveTime = Misc_GetTimeMs();
+                                addIncrementForPreviousMover(gui, board);
                                 
                                 // Check for checkmate/stalemate after engine move
                                 if (checkresult(board) == BOOL_TYPE_TRUE) {
-                                    SetGameOver(gui, board);
+                                    setGameOver(gui, board);
                                     printf("*** GAME OVER ***\n");
                                     return; // Game has ended
                                 }
@@ -1336,7 +1322,7 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                                 printf("✗ Engine couldn't find a move!\n");
                                 // If engine can't find a move, check game state
                                 if (checkresult(board) == BOOL_TYPE_TRUE) {
-                                    SetGameOver(gui, board);
+                                    setGameOver(gui, board);
                                     printf("*** GAME OVER ***\n");
                                     return; // Game has ended
                                 }
@@ -1344,15 +1330,15 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
                         }
                     } else {
                         // Player vs Player mode - just switch turns, no engine move
-                        printf("PvP Mode: It's now %s's turn\n", board->side == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK");
+                        printf("PvP Mode: It's now %s's turn\n", board->getSide() == COLOR_TYPE_WHITE ? "COLOR_TYPE_WHITE" : "COLOR_TYPE_BLACK");
                     }
                 } else {
-                    printf("✗ Move_Make failed! Move was invalid.\n");
+                    printf("✗ Move_Make failed! move was invalid.\n");
                     gui->selectedSquare = NO_SQ;
                     
                     // If the user can't make any legal moves, check for checkmate/stalemate
                     if (checkresult(board) == BOOL_TYPE_TRUE) {
-                        SetGameOver(gui, board);
+                        setGameOver(gui, board);
                         printf("*** GAME OVER ***\n");
                         return; // Game has ended
                     }
@@ -1365,12 +1351,12 @@ void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, 
     }
 }
 
-void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
+void gUIRun(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
     GUI gui;
     
     printf("Initializing GUI...\n");
     
-    if (!GUI_Init(&gui)) {
+    if (!gUIInit(&gui)) {
         printf("Failed to initialize GUI\n");
         return;
     }
@@ -1384,7 +1370,7 @@ void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
     info->depth = 6;
     info->quit = BOOL_TYPE_FALSE;
     info->stopped = BOOL_TYPE_FALSE;
-    info->GAME_MODE = MODE_TYPE_CONSOLE; // Set a default mode
+    info->gameMode = MODE_TYPE_CONSOLE; // Set a default mode
     
     printf("Board set to starting position. Starting main loop...\n");
     printf("\n=== GAMBIT CHESS ===\n");
@@ -1399,24 +1385,30 @@ void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
     
     while (gui.isRunning) {
         while (SDL_PollEvent(&e) != 0) {
-            if (e.type == SDL_QUIT) {
-                gui.isRunning = 0;
-            } else if (e.type == SDL_MOUSEBUTTONDOWN) {
-                if (e.button.button == SDL_BUTTON_LEFT) {
-                    GUI_HandleMouseClick(&gui, board, info, e.button.x, e.button.y, eval);
-                }
-            } else if (e.type == SDL_MOUSEWHEEL) {
+            if (e.type == SDL_MOUSEWHEEL) {
                 // Scroll move history
                 if (e.wheel.y > 0) {
                     // Scroll up
-                    gui.historyScrollOffset = (gui.historyScrollOffset > 0) ? gui.historyScrollOffset - 2 : 0;
+                    gui.moveHistoryTracker.scrollUp();
+                    gui.moveHistoryTracker.scrollUp();
+                    syncHistoryStateFromComponent(&gui);
                 } else if (e.wheel.y < 0) {
                     // Scroll down
-                    int maxScroll = (gui.moveCount > 20) ? gui.moveCount - 20 : 0;
-                    gui.historyScrollOffset = (gui.historyScrollOffset < maxScroll) ? gui.historyScrollOffset + 2 : maxScroll;
+                    gui.moveHistoryTracker.scrollDown();
+                    gui.moveHistoryTracker.scrollDown();
+                    syncHistoryStateFromComponent(&gui);
                 }
-            } else if (e.type == SDL_KEYDOWN) {
-                if (e.key.keysym.sym == SDLK_n) {
+                continue;
+            }
+
+            InputEvent inputEvent;
+            inputEvent = gui.inputHandler.processEvent(e);
+
+            if (inputEvent.action == InputAction::QUIT) {
+                gui.isRunning = 0;
+            } else if (inputEvent.action == InputAction::SQUARE_CLICKED) {
+                gUIHandleMouseClick(&gui, board, info, inputEvent.mouseX, inputEvent.mouseY, eval);
+            } else if (inputEvent.action == InputAction::NEW_GAME) {
                     // New game
                     board->parseFromFEN(CHESS_START_FEN);
                     gui.selectedSquare = NO_SQ;
@@ -1432,6 +1424,8 @@ void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
                     gui.promotionToSq = NO_SQ;
                     
                     // Reset move history
+                    gui.moveHistoryTracker.clear();
+                    syncHistoryStateFromComponent(&gui);
                     gui.moveCount = 0;
                     gui.historyScrollOffset = 0;
                     for (int i = 0; i < MAX_DISPLAY_MOVES; i++) {
@@ -1439,19 +1433,19 @@ void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
                     }
                     
                     // Reset timers
-                    ResetTimers(&gui);
+                    resetTimers(&gui);
 
                     // Reset captured pieces
                     gui.capturedWhiteCount = 0;
                     gui.capturedBlackCount = 0;
                     
                     printf("New game started in %s mode\n", gui.gameMode == MODE_PVE ? "Player vs Engine" : "Player vs Player");
-                } else if (e.key.keysym.sym == SDLK_m) {
+            } else if (inputEvent.action == InputAction::SWITCH_MODE) {
                     // Switch game mode
                     gui.gameMode = (gui.gameMode == MODE_PVE) ? MODE_PVP : MODE_PVE;
                     printf("Switched to %s mode\n", gui.gameMode == MODE_PVE ? "Player vs Engine" : "Player vs Player");
                     printf("Press 'N' for new game to apply mode change\n");
-                } else if (e.key.keysym.sym == SDLK_h) {
+            } else if (inputEvent.action == InputAction::SHOW_HELP) {
                     // Show help
                     printf("\n=== CONTROLS ===\n");
                     printf("N - New Game\n");
@@ -1459,18 +1453,18 @@ void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval) {
                     printf("H - Show this help\n");
                     printf("Current mode: %s\n", gui.gameMode == MODE_PVE ? "Player vs Engine" : "Player vs Player");
                     printf("================\n\n");
-                }
+            }
             }
         }
         
         // Update timer
-        UpdateTimer(&gui, board);
+        updateTimer(&gui, board);
         
-        GUI_RenderBoard(&gui, board);
+        gUIRenderBoard(&gui, board);
         SDL_Delay(16); // ~60 FPS
     }
     
     printf("GUI loop ended. Cleaning up...\n");
-    CleanupGUI(&gui);
+    cleanupGUI(&gui);
     printf("GUI cleanup complete.\n");
 }

@@ -1,3 +1,11 @@
+/**
+ * @file openingbook_keys.cpp
+ * @brief Polyglot opening-book random key table definition
+ *
+ * OOD/SOLID role:
+ * - SRP: Contains only immutable key data used by opening-book hashing.
+ * - OCP: Engine hashing behavior can be extended without changing key users.
+ */
 #include "types_definitions.h"
 #include "openingbook_keys.h"
 

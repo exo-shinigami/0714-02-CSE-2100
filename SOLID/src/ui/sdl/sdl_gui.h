@@ -1,7 +1,20 @@
+/**
+ * @file sdl_gui.h
+ * @brief SDL GUI composition root and legacy compatibility surface
+ *
+ * OOD/SOLID role:
+ * - SRP: Aggregates GUI runtime state while delegating input/history/timer
+ *   responsibilities to dedicated component classes.
+ * - DIP: Uses forward declarations for high-level dependencies.
+ * - ISP/OCP: Public API remains stable while internal components evolve.
+ */
 #ifndef GUI_H
 #define GUI_H
 
 #include "types_definitions.h"
+#include "game_timer.h"
+#include "move_history_tracker.h"
+#include "gui_input_handler.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>  // Add explicit TTF include
 
@@ -17,7 +30,7 @@
 #define CAPTURED_PIECE_PADDING 5
 #define CAPTURED_SECTION_Y_START 10
 
-// Move history constants
+// move history constants
 #define MAX_DISPLAY_MOVES 100
 #define MOVE_HISTORY_SCROLL_SPEED 3
 
@@ -42,7 +55,7 @@
 #define MODE_PVE 0  // Player vs Engine
 #define MODE_PVP 1  // Player vs Player
 
-typedef struct {
+struct GUI {
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_Texture* pieceTextures[13];
@@ -52,10 +65,11 @@ typedef struct {
     char gameOverMessage[256];  // Message to display when game is over (increased buffer size)
     int gameMode;  // MODE_PVE or MODE_PVP
     
-    // Move history tracking
+    // move history tracking
     char moveHistory[MAX_DISPLAY_MOVES][10];  // Store move strings like "e2e4"
     int moveCount;
     int historyScrollOffset;
+    MoveHistoryTracker moveHistoryTracker;
     
     // Chess timer tracking
     int whiteTimeMs;           // White's remaining time in milliseconds
@@ -64,8 +78,12 @@ typedef struct {
     int lastMoveTime;          // Timestamp of last move
     int timerActive;           // Is timer running (0=no, 1=yes)
     int timerPaused;           // Is timer paused
+    GameTimer gameTimer;
+
+    // Input handling abstraction
+    GUIInputHandler inputHandler;
     
-    // Move highlighting
+    // move highlighting
     int possibleMoves[256];    // Array of possible move squares
     int possibleMovesCount;    // Number of possible moves
     
@@ -79,24 +97,24 @@ typedef struct {
     int capturedBlack[16];
     int capturedWhiteCount;
     int capturedBlackCount;
-} GUI;
+};
 
 // Function declarations
-int GUI_Init(GUI* gui);
-void CleanupGUI(GUI* gui);
-void GUI_RenderBoard(GUI* gui, ChessBoard* board);
-void RenderCapturedPieces(GUI* gui);
-void RenderMoveHistory(GUI* gui, ChessBoard* board);
-void RenderTimers(GUI* gui, ChessBoard* board);
-void AddMoveToHistory(GUI* gui, const char* moveStr);
-void UpdateTimer(GUI* gui, ChessBoard* board);
-void ResetTimers(GUI* gui);
-void GUI_HandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, int y, const IEvaluator& eval);
-int SquareFromCoords(int x, int y);
-void GetSquareCoords(int square, int* x, int* y);
-void GUI_DrawPiece(GUI* gui, int piece, int x, int y);
-void DrawCapturedPiece(GUI* gui, int piece, int x, int y, int size);
-void GUI_Run(ChessBoard* board, SearchInfo* info, const IEvaluator& eval);
+int gUIInit(GUI* gui);
+void cleanupGUI(GUI* gui);
+void gUIRenderBoard(GUI* gui, ChessBoard* board);
+void renderCapturedPieces(GUI* gui);
+void renderMoveHistory(GUI* gui, ChessBoard* board);
+void renderTimers(GUI* gui, ChessBoard* board);
+void addMoveToHistory(GUI* gui, const char* moveStr);
+void updateTimer(GUI* gui, ChessBoard* board);
+void resetTimers(GUI* gui);
+void gUIHandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, int y, const IEvaluator& eval);
+int squareFromCoords(int x, int y);
+void getSquareCoords(int square, int* x, int* y);
+void gUIDrawPiece(GUI* gui, int piece, int x, int y);
+void drawCapturedPiece(GUI* gui, int piece, int x, int y, int size);
+void gUIRun(ChessBoard* board, SearchInfo* info, const IEvaluator& eval);
 const char* GetPieceSymbol(int piece);
 
 #endif

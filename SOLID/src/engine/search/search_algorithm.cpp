@@ -6,9 +6,9 @@
  * - Iterative deepening
  * - Principal Variation Search (PVS)
  * - Null move pruning
- * - Quiescence search (for tactical stability)
+ * - quiescence search (for tactical stability)
  * - Transposition table integration
- * - Move ordering (hash move, MVV-LVA, killer moves, history heuristic)
+ * - move ordering (hash move, MVV-LVA, killer moves, history heuristic)
  * - Time management
  * - Aspiration windows
  * 
@@ -27,18 +27,18 @@
 
 int rootDepth;
 
-static void CheckUp(SearchInfo *info) {
+static void checkUp(SearchInfo *info) {
 	// .. check if time up, or interrupt from GUI
-	if(info->timeset == BOOL_TYPE_TRUE && Misc_GetTimeMs() > info->stoptime) {
+	if(info->timeset == BOOL_TYPE_TRUE && miscGetTimeMs() > info->stoptime) {
 		info->stopped = BOOL_TYPE_TRUE;
 	}
 
-	Misc_ReadInput(info);
+	miscReadInput(info);
 }
 
-static void PickNextMove(int moveNum, MoveList *list) {
+static void pickNextMove(int moveNum, MoveList *list) {
 
-	Move temp;
+	move temp;
 	int index = 0;
 	int bestScore = 0;
 	int bestNum = moveNum;
@@ -59,25 +59,25 @@ static void PickNextMove(int moveNum, MoveList *list) {
 	list->at(bestNum) = temp;
 }
 
-static int IsRepetition(const ChessBoard *board) {
+static int isRepetition(const ChessBoard *board) {
 
 	int index = 0;
 
-	for(index = board->hisPly - board->fiftyMove; index < board->hisPly-1; ++index) {
+	for(index = board->getHistoryPly() - board->getFiftyMoveCounter(); index < board->getHistoryPly()-1; ++index) {
 		ASSERT(index >= 0 && index < CHESS_MAX_GAME_MOVES);
-		if(board->posKey == board->history[index].posKey) {
+		if(board->getPositionKey() == board->getHistoryPositionKey(index)) {
 			return BOOL_TYPE_TRUE;
 		}
 	}
 	return BOOL_TYPE_FALSE;
 }
 
-static void Search_ClearFor(ChessBoard *board, SearchInfo *info) {
+static void searchClearFor(ChessBoard *board, SearchInfo *info) {
 
 	info->clearSearchTables();
 
-	board->hashTable.clearStats();
-	board->ply = 0;
+	board->clearHashStats();
+	board->setPly(0);
 
 	info->stopped = 0;
 	info->nodes = 0;
@@ -85,214 +85,213 @@ static void Search_ClearFor(ChessBoard *board, SearchInfo *info) {
 	info->fhf = 0;
 }
 
-static int Quiescence(int alpha, int beta, ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+static int quiescence(int alpha, int beta, ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
 	ASSERT(board->check());
 	ASSERT(beta>alpha);
 	if(( info->nodes & 2047 ) == 0) {
-		CheckUp(info);
+		checkUp(info);
 	}
 
 	info->nodes++;
 
-	if(IsRepetition(board) || board->fiftyMove >= 100) {
+	if(isRepetition(board) || board->getFiftyMoveCounter() >= 100) {
 		return 0;
 	}
 
-	if(board->ply > CHESS_MAX_SEARCH_DEPTH - 1) {
+	if(board->getPly() > CHESS_MAX_SEARCH_DEPTH - 1) {
 		return eval.evaluate(*board);
 	}
 
-	int Score = eval.evaluate(*board);
+	int score = eval.evaluate(*board);
 
-	ASSERT(Score>-CHESS_INFINITE && Score<CHESS_INFINITE);
+	ASSERT(score>-CHESS_INFINITE && score<CHESS_INFINITE);
 
-	if(Score >= beta) {
+	if(score >= beta) {
 		return beta;
 	}
 
-	if(Score > alpha) {
-		alpha = Score;
+	if(score > alpha) {
+		alpha = score;
 	}
 
 	MoveList list[1];
-    GenerateAllCaps(board, list, info);
+    generateAllCaps(board, list, info);
 
-    int MoveNum = 0;
-	int Legal = 0;
-	Score = -CHESS_INFINITE;
+    int moveNum = 0;
+	int legal = 0;
+	score = -CHESS_INFINITE;
 
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
+	for(moveNum = 0; moveNum < list->size(); ++moveNum) {
 
-		PickNextMove(MoveNum, list);
+		pickNextMove(moveNum, list);
 
-        if ( !board->makeMove(list->at(MoveNum).raw()))  {
+        if ( !board->makeMove(list->at(moveNum).raw()))  {
             continue;
         }
 
-		Legal++;
-		Score = -Quiescence( -beta, -alpha, board, info, eval);
+		legal++;
+		score = -quiescence( -beta, -alpha, board, info, eval);
         board->takeMove();
 
 		if(info->stopped == BOOL_TYPE_TRUE) {
 			return 0;
 		}
 
-		if(Score > alpha) {
-			if(Score >= beta) {
-				if(Legal==1) {
+		if(score > alpha) {
+			if(score >= beta) {
+				if(legal==1) {
 					info->fhf++;
 				}
 				info->fh++;
 				return beta;
 			}
-			alpha = Score;
+			alpha = score;
 		}
     }
 
-	ASSERT(alpha >= OldAlpha);
+	ASSERT(alpha >= oldAlpha);
 
 	return alpha;
 }
 
-static int AlphaBeta(int alpha, int beta, int depth, ChessBoard *board, SearchInfo *info, int DoNull, const IEvaluator& eval) {
+static int alphaBeta(int alpha, int beta, int depth, ChessBoard *board, SearchInfo *info, int DoNull, const IEvaluator& eval) {
 
 	ASSERT(board->check());
 	ASSERT(beta>alpha);
 	ASSERT(depth>=0);
 
 	if(depth <= 0) {
-		return Quiescence(alpha, beta, board, info, eval);
+		return quiescence(alpha, beta, board, info, eval);
 		// return eval.evaluate(*board);
 	}
 
 	if(( info->nodes & 2047 ) == 0) {
-		CheckUp(info);
+		checkUp(info);
 	}
 
 	info->nodes++;
 
-	if((IsRepetition(board) || board->fiftyMove >= 100) && board->ply) {
+	if((isRepetition(board) || board->getFiftyMoveCounter() >= 100) && board->getPly()) {
 		return 0;
 	}
 
-	if(board->ply > CHESS_MAX_SEARCH_DEPTH - 1) {
+	if(board->getPly() > CHESS_MAX_SEARCH_DEPTH - 1) {
 		return eval.evaluate(*board);
 	}
 
-	int InCheck = board->isSquareAttacked(board->KingSq[board->side], board->side^1);
+	int inCheck = board->isSquareAttacked(board->getKingSquare(board->getSide()), board->getSide()^1);
 
-	if(InCheck == BOOL_TYPE_TRUE) {
+	if(inCheck == BOOL_TYPE_TRUE) {
 		depth++;
 	}
 
-	int Score = -CHESS_INFINITE;
-	int PvMove = NOMOVE;
+	int score = -CHESS_INFINITE;
+	int pvMove = NOMOVE;
 
-	if( board->hashTable.probeEntry(board, &PvMove, &Score, alpha, beta, depth) == BOOL_TYPE_TRUE ) {
-		board->hashTable.incrementCut();
-		return Score;
+	if( board->probeHashEntry(&pvMove, &score, alpha, beta, depth) == BOOL_TYPE_TRUE ) {
+		board->incrementHashCut();
+		return score;
 	}
 
-	if( DoNull && !InCheck && board->ply && (board->bigPce[board->side] > 0) && depth >= 4) {
+	if( DoNull && !inCheck && board->getPly() && (board->getBigPieceCount(board->getSide()) > 0) && depth >= 4) {
 		board->makeNullMove();
-		Score = -AlphaBeta( -beta, -beta + 1, depth-4, board, info, BOOL_TYPE_FALSE, eval);
+		score = -alphaBeta( -beta, -beta + 1, depth-4, board, info, BOOL_TYPE_FALSE, eval);
 		board->takeNullMove();
 		if(info->stopped == BOOL_TYPE_TRUE) {
 			return 0;
 		}
 
-		if (Score >= beta && abs(Score) < CHESS_IS_MATE) {
+		if (score >= beta && abs(score) < CHESS_IS_MATE) {
 			info->nullCut++;
 			return beta;
 		}
 	}
 
 	MoveList list[1];
-    Move_GenerateAll(board, list, info);
+    moveGenerateAll(board, list, info);
 
-    int MoveNum = 0;
-	int Legal = 0;
-	int OldAlpha = alpha;
-	int BestMove = NOMOVE;
+    int moveNum = 0;
+	int legal = 0;
+	int oldAlpha = alpha;
+	int bestMove = NOMOVE;
 
-	int BestScore = -CHESS_INFINITE;
+	int bestScore = -CHESS_INFINITE;
 
-	Score = -CHESS_INFINITE;
+	score = -CHESS_INFINITE;
 
-	if( PvMove != NOMOVE) {
-		for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
-			if( list->at(MoveNum).raw() == PvMove) {
-				list->at(MoveNum).setScore(2000000);
+	if( pvMove != NOMOVE) {
+		for(moveNum = 0; moveNum < list->size(); ++moveNum) {
+			if( list->at(moveNum).raw() == pvMove) {
+				list->at(moveNum).setScore(2000000);
 				//printf("Pv move found \n");
 				break;
 			}
 		}
 	}
 
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
+	for(moveNum = 0; moveNum < list->size(); ++moveNum) {
 
-		PickNextMove(MoveNum, list);
+		pickNextMove(moveNum, list);
 
-        if ( !board->makeMove(list->at(MoveNum).raw()))  {
+        if ( !board->makeMove(list->at(moveNum).raw()))  {
             continue;
         }
 
-		Legal++;
-		Score = -AlphaBeta( -beta, -alpha, depth-1, board, info, BOOL_TYPE_TRUE, eval);
+		legal++;
+		score = -alphaBeta( -beta, -alpha, depth-1, board, info, BOOL_TYPE_TRUE, eval);
 		board->takeMove();
 
 		if(info->stopped == BOOL_TYPE_TRUE) {
 			return 0;
 		}
-		if(Score > BestScore) {
-			BestScore = Score;
-			BestMove = list->at(MoveNum).raw();
-			if(Score > alpha) {
-				if(Score >= beta) {
-					if(Legal==1) {
+		if(score > bestScore) {
+			bestScore = score;
+			bestMove = list->at(moveNum).raw();
+			if(score > alpha) {
+				if(score >= beta) {
+					if(legal==1) {
 						info->fhf++;
 					}
 					info->fh++;
 
-					if(!(list->at(MoveNum).raw() & MFLAGCAP)) {
-					info->searchKillers[1][board->ply] = info->searchKillers[0][board->ply];
-					info->searchKillers[0][board->ply] = list->at(MoveNum).raw();
+					if(!(list->at(moveNum).raw() & MFLAGCAP)) {
+					info->storeKillerMove(board->getPly(), list->at(moveNum).raw());
 				}
 
-					board->hashTable.storeEntry(board, BestMove, beta, HFBETA, depth);
+					board->storeHashEntry(bestMove, beta, HFBETA, depth);
 
 					return beta;
 				}
-				alpha = Score;
+				alpha = score;
 
-				if(!(list->at(MoveNum).raw() & MFLAGCAP)) {
-					info->searchHistory[board->pieces[MOVE_GET_FROM_SQUARE(BestMove)]][MOVE_GET_TO_SQUARE(BestMove)] += depth;
+				if(!(list->at(moveNum).raw() & MFLAGCAP)) {
+					info->addHistoryScore(board->pieceAt(MOVE_GET_FROM_SQUARE(bestMove)), MOVE_GET_TO_SQUARE(bestMove), depth);
 				}
 			}
 		}
     }
 
-	if(Legal == 0) {
-		if(InCheck) {
-			return -CHESS_INFINITE + board->ply;
+	if(legal == 0) {
+		if(inCheck) {
+			return -CHESS_INFINITE + board->getPly();
 		} else {
 			return 0;
 		}
 	}
 
-	ASSERT(alpha>=OldAlpha);
+	ASSERT(alpha>=oldAlpha);
 
-	if(alpha != OldAlpha) {
-		board->hashTable.storeEntry(board, BestMove, BestScore, HFEXACT, depth);
+	if(alpha != oldAlpha) {
+		board->storeHashEntry(bestMove, bestScore, HFEXACT, depth);
 	} else {
-		board->hashTable.storeEntry(board, BestMove, alpha, HFALPHA, depth);
+		board->storeHashEntry(bestMove, alpha, HFALPHA, depth);
 	}
 
 	return alpha;
 }
 
-void Search_Position(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+void searchPosition(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 
 	int bestMove = NOMOVE;
 	int bestScore = -CHESS_INFINITE;
@@ -300,10 +299,10 @@ void Search_Position(ChessBoard *board, SearchInfo *info, const IEvaluator& eval
 	int pvMoves = 0;
 	int pvNum = 0;
 
-	Search_ClearFor(board,info);
+	searchClearFor(board,info);
 	
 	if(EngineOptions::instance().isBookEnabled()) {
-		bestMove = PolyBook_GetMove(board);
+		bestMove = polyBookGetMove(board);
 	}
 
 	//printf("Search depth:%d\n",info->depth);
@@ -313,47 +312,47 @@ void Search_Position(ChessBoard *board, SearchInfo *info, const IEvaluator& eval
 		for( currentDepth = 1; currentDepth <= info->depth; ++currentDepth ) {
 								// alpha	 beta
 			rootDepth = currentDepth;
-				AlphaBeta(-CHESS_INFINITE, CHESS_INFINITE, currentDepth, board, info, BOOL_TYPE_TRUE, eval);
+				alphaBeta(-CHESS_INFINITE, CHESS_INFINITE, currentDepth, board, info, BOOL_TYPE_TRUE, eval);
 
 			if(info->stopped == BOOL_TYPE_TRUE) {
 				break;
 			}
 
-			board->hashTable.getPvLine(currentDepth, board, info);
-			bestMove = info->PvArray[0];
-			if(info->GAME_MODE == MODE_TYPE_UCI) {
+			board->getPvLine(currentDepth, info);
+			bestMove = info->getPvMove(0);
+			if(info->gameMode == MODE_TYPE_UCI) {
 				printf("info score cp %d depth %d nodes %ld time %d ",
-					bestScore,currentDepth,info->nodes,Misc_GetTimeMs()-info->starttime);
-			} else if(info->GAME_MODE == MODE_TYPE_XBOARD && info->POST_THINKING == BOOL_TYPE_TRUE) {
+					bestScore,currentDepth,info->nodes,miscGetTimeMs()-info->starttime);
+			} else if(info->gameMode == MODE_TYPE_XBOARD && info->postThinking == BOOL_TYPE_TRUE) {
 				printf("%d %d %d %ld ",
-					currentDepth,bestScore,(Misc_GetTimeMs()-info->starttime)/10,info->nodes);
-			} else if(info->POST_THINKING == BOOL_TYPE_TRUE) {
+					currentDepth,bestScore,(miscGetTimeMs()-info->starttime)/10,info->nodes);
+			} else if(info->postThinking == BOOL_TYPE_TRUE) {
 				printf("score:%d depth:%d nodes:%ld time:%d(ms) ",
-					bestScore,currentDepth,info->nodes,Misc_GetTimeMs()-info->starttime);
+					bestScore,currentDepth,info->nodes,miscGetTimeMs()-info->starttime);
 			}
-			if(info->GAME_MODE == MODE_TYPE_UCI || info->POST_THINKING == BOOL_TYPE_TRUE) {
-				pvMoves = board->hashTable.getPvLine(currentDepth, board, info);
-				if(info->GAME_MODE != MODE_TYPE_XBOARD) {
+			if(info->gameMode == MODE_TYPE_UCI || info->postThinking == BOOL_TYPE_TRUE) {
+				pvMoves = board->getPvLine(currentDepth, info);
+				if(info->gameMode != MODE_TYPE_XBOARD) {
 					printf("pv");
 				}
 				for(pvNum = 0; pvNum < pvMoves; ++pvNum) {
-					printf(" %s",PrMove(info->PvArray[pvNum]));
+					printf(" %s",prMove(info->getPvMove(pvNum)));
 				}
 				printf("\n");
 			}
 
-			//printf("Hits:%d Overwrite:%d NewWrite:%d Cut:%d\nOrdering %.2f NullCut:%d\n",board->hashTable.hit,board->hashTable.overWrite,board->hashTable.newWrite,board->hashTable.cut,
+			// Hash stats debug output intentionally omitted from board internals here.
 			//(info->fhf/info->fh)*100,info->nullCut);
 		}
 	}
 
-	if(info->GAME_MODE == MODE_TYPE_UCI) {
-		printf("bestmove %s\n",PrMove(bestMove));
-	} else if(info->GAME_MODE == MODE_TYPE_XBOARD) {
-		printf("move %s\n",PrMove(bestMove));
+	if(info->gameMode == MODE_TYPE_UCI) {
+		printf("bestmove %s\n",prMove(bestMove));
+	} else if(info->gameMode == MODE_TYPE_XBOARD) {
+		printf("move %s\n",prMove(bestMove));
 		board->makeMove(bestMove);
 	} else {
-		printf("\n\n***!! Gambit makes move %s !!***\n\n",PrMove(bestMove));
+		printf("\n\n***!! Gambit makes move %s !!***\n\n",prMove(bestMove));
 		board->makeMove(bestMove);
 		board->print();
 	}
@@ -361,14 +360,14 @@ void Search_Position(ChessBoard *board, SearchInfo *info, const IEvaluator& eval
 }
 
 // GUI-specific function that returns the best move without making it
-int Search_GetBestMove(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
+int searchGetBestMove(ChessBoard *board, SearchInfo *info, const IEvaluator& eval) {
 	int bestMove = NOMOVE;
 	int currentDepth = 0;
 
-	Search_ClearFor(board,info);
+	searchClearFor(board,info);
 	
 	if(EngineOptions::instance().isBookEnabled()) {
-		bestMove = PolyBook_GetMove(board);
+		bestMove = polyBookGetMove(board);
 	}
 
 	// iterative deepening
@@ -376,14 +375,14 @@ int Search_GetBestMove(ChessBoard *board, SearchInfo *info, const IEvaluator& ev
 		for( currentDepth = 1; currentDepth <= info->depth; ++currentDepth ) {
 								// alpha	 beta
 			rootDepth = currentDepth;
-AlphaBeta(-CHESS_INFINITE, CHESS_INFINITE, currentDepth, board, info, BOOL_TYPE_TRUE, eval);
+alphaBeta(-CHESS_INFINITE, CHESS_INFINITE, currentDepth, board, info, BOOL_TYPE_TRUE, eval);
 
 			if(info->stopped == BOOL_TYPE_TRUE) {
 				break;
 			}
 
-			board->hashTable.getPvLine(currentDepth, board, info);
-			bestMove = info->PvArray[0];
+			board->getPvLine(currentDepth, info);
+			bestMove = info->getPvMove(0);
 		}
 	}
 	

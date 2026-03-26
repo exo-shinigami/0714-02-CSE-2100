@@ -26,7 +26,7 @@ int GUIInputHandler::squareFromCoords(int x, int y) const {
     }
     
     // Convert to 120-square board representation
-    return FILE_RANK_TO_SQUARE(file, rank);
+    return fILERANKTOSQUARE(file, rank);
 }
 
 bool GUIInputHandler::isInBoardArea(int x, int y) const {

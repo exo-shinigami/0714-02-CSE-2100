@@ -1,8 +1,8 @@
 /**
  * @file search_perft.c
- * @brief Performance testing (Perft) for move generation validation
+ * @brief Performance testing (perft) for move generation validation
  * 
- * Perft (Performance Test) is a debugging function that counts all
+ * perft (Performance Test) is a debugging function that counts all
  * leaf nodes at a given depth. It's used to:
  * - Validate move generation correctness
  * - Test make/unmake move functions
@@ -19,62 +19,64 @@
 #include "types_definitions.h"
 #include "stdio.h"
 
-long leafNodes;
+void PerftRunner::runRecursive(int depth) {
+    ASSERT(board_ != nullptr);
+    ASSERT(board_->check());
 
-void Perft(int depth, ChessBoard *board) {
-
-    ASSERT(board->check());  
-
-	if(depth == 0) {
-        leafNodes++;
+    if (depth == 0) {
+        leafNodes_++;
         return;
-    }	
-
-    MoveList list[1];
-    Move_GenerateAll(board,list);
-      
-    int MoveNum = 0;
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {	
-       
-        if ( !board->makeMove(list->at(MoveNum).raw()))  {
-            continue;
-        }
-        Perft(depth - 1, board);
-        board->takeMove();
     }
 
-    return;
+    MoveList list[1];
+    moveGenerateAll(board_, list);
+
+    for (int moveNum = 0; moveNum < list->size(); ++moveNum) {
+        if (!board_->makeMove(list->at(moveNum).raw())) {
+            continue;
+        }
+        runRecursive(depth - 1);
+        board_->takeMove();
+    }
 }
 
+long PerftRunner::run(int depth) {
+    leafNodes_ = 0;
+    runRecursive(depth);
+    return leafNodes_;
+}
 
-void Search_PerftTest(int depth, ChessBoard *board) {
+void PerftRunner::test(int depth) {
+    ASSERT(board_ != nullptr);
+    ASSERT(board_->check());
 
-    ASSERT(board->check());
-
-	board->print();
-	printf("\nStarting Test To Depth:%d\n",depth);	
-	leafNodes = 0;
-	int start = Misc_GetTimeMs();
+    board_->print();
+    printf("\nStarting Test To Depth:%d\n", depth);
+    leafNodes_ = 0;
+    int start = miscGetTimeMs();
     MoveList list[1];
-    Move_GenerateAll(board,list);	
+    moveGenerateAll(board_, list);
     
-    int move;	    
-    int MoveNum = 0;
-	for(MoveNum = 0; MoveNum < list->size(); ++MoveNum) {
-        move = list->at(MoveNum).raw();
-        if ( !board->makeMove(move))  {
+    int move;
+    for (int moveNum = 0; moveNum < list->size(); ++moveNum) {
+        move = list->at(moveNum).raw();
+        if (!board_->makeMove(move)) {
             continue;
         }
-        long cumnodes = leafNodes;
-        Perft(depth - 1, board);
-        board->takeMove();        
-        long oldnodes = leafNodes - cumnodes;
-        printf("move %d : %s : %ld\n",MoveNum+1,PrMove(move),oldnodes);
+        long cumnodes = leafNodes_;
+        runRecursive(depth - 1);
+        board_->takeMove();
+        long oldnodes = leafNodes_ - cumnodes;
+        printf("move %d : %s : %ld\n", moveNum + 1, prMove(move), oldnodes);
     }
-	
-	printf("\nTest Complete : %ld nodes visited in %dms\n",leafNodes,Misc_GetTimeMs() - start);
 
-    return;
+    printf("\nTest Complete : %ld nodes visited in %dms\n", leafNodes_, miscGetTimeMs() - start);
+}
+
+void searchPerftTest(int depth, ChessBoard *board) {
+    ASSERT(board != nullptr);
+    PerftRunner runner(*board);
+    runner.test(depth);
 }
 
 

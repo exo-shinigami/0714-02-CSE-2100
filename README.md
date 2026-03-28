@@ -1,3 +1,7 @@
+# 0714-02-CSE-2100
+Course Code: 0714 02 CSE 2100 || Course Title : Advanced Programming Laboratory
+ || ID : 240204 , 240215
+ 
 # Gambit Chess Engine: C to C++ Transition with OOD and SOLID Implementation
 
 **Course:** Advanced Programming Lab (2nd Year CSE)  

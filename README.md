@@ -550,6 +550,7 @@ private:
 ## Prompt 6 - DIP Enforcement
 "Refactor protocol and GUI code to use interfaces, not concrete engine classes. Remove direct calls to specific evaluators and search code. This makes testing easier."
 
+Presentation output: a dependency diagram that replaces concrete arrows with interface arrows.
 
 ```mermaid
 flowchart LR
@@ -560,6 +561,7 @@ flowchart LR
 ## Prompt 7 - RAII and Ownership
 "Replace manual memory handling with RAII. Use standard containers and smart pointers where needed. Keep lifetimes the same."
 
+Presentation output: a short code snippet showing raw pointers replaced by `std::unique_ptr`.
 
 ```cpp
 // RAII in HashTable
@@ -574,6 +576,7 @@ public:
 ## Prompt 8 - Regression Gate
 "After each refactor batch, run build checks, perft, and protocol tests. Compare with the baseline and show pass/fail. If anything changed, point to where."
 
+Presentation output: a results table that defines what must match between baseline and current values.
 
 | Test | Must match |
 |---|---|
@@ -584,6 +587,7 @@ public:
 ## Prompt 9 - Performance Gate
 "Measure engine speed before and after refactoring using the same settings. Flag any slowdown above the limit and say where it happens."
 
+Presentation output: a simple performance target summary.
 
 | Metric | Target |
 |---|---|
@@ -592,6 +596,7 @@ public:
 ## Prompt 10 - Final SOLID Audit
 "Do a final SOLID check. List issues by severity and explain them in simple words. For each issue, suggest a practical fix."
 
+Presentation output: a short list grouped by severity with one-line fixes.
 
 | Severity | Issue | Fix |
 |---|---|---|

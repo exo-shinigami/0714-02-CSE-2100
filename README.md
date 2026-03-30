@@ -241,20 +241,9 @@ classDiagram
 
 ```mermaid
 flowchart LR
-	P(Presentation Layer)
-    [SDL GUI, UCI, XBoard]
-        |
-        v 
-    S(Service Layer)
-    [GameController, SearchService]
-        |
-        v
-    D(Domain Layer)
-    [Board, Moves, Rules]
-        |
-        v
-    I(Infrastructure)
-    [Hash, Opening Book, Utils]
+	P[Presentation Layer<br/>SDL GUI, UCI, XBoard] --> S[Service Layer<br/>GameController, SearchService]
+	S --> D[Domain Layer<br/>Board, Moves, Rules]
+	D --> I[Infrastructure<br/>Hash, Opening Book, Utils]
 
 	P -. depends on interfaces .-> S
 	S -. depends on interfaces .-> D

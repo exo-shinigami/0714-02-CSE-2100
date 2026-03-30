@@ -27,12 +27,12 @@
 
 #include "sdl_gui.h"
 #include "types_definitions.h"
-#include "game_timer.h"
-#include "move_history_tracker.h"
-#include "gui_input_handler.h"
-#include "game_controller.h"
-#include "promotion_service.h"
-#include "sdl_ttf_compat.h"
+#include "state/game_timer.h"
+#include "state/move_history_tracker.h"
+#include "input/gui_input_handler.h"
+#include "controller/game_controller.h"
+#include "services/promotion_service.h"
+#include "platform/sdl_ttf_compat.h"
 #include <SDL2/SDL.h>
 #include <string.h>
 #include <ctype.h>

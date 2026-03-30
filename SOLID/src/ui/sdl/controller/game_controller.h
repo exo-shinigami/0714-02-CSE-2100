@@ -14,9 +14,9 @@
 #define GAME_CONTROLLER_H
 
 #include "types_definitions.h"
-#include "sdl_gui.h"
-#include "gui_input_handler.h"
-#include "engine_move_policy.h"
+#include "../sdl_gui.h"
+#include "../input/gui_input_handler.h"
+#include "../services/engine_move_policy.h"
 #include <SDL2/SDL.h>
 
 /**

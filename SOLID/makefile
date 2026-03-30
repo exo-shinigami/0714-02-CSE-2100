@@ -54,11 +54,13 @@ SOURCES_CORE = \
 # GUI source files (added to core for full build)
 SOURCES_GUI = \
 	$(SRC_UI_SDL)/sdl_gui.cpp \
-	$(SRC_UI_SDL)/game_timer.cpp \
-	$(SRC_UI_SDL)/move_history_tracker.cpp \
-	$(SRC_UI_SDL)/gui_input_handler.cpp
+        $(SRC_UI_SDL)/state/game_timer.cpp \
+        $(SRC_UI_SDL)/state/move_history_tracker.cpp \
+        $(SRC_UI_SDL)/input/gui_input_handler.cpp \
+        $(SRC_UI_SDL)/controller/game_controller.cpp \
+        $(SRC_UI_SDL)/services/engine_move_policy.cpp \
+        $(SRC_UI_SDL)/services/promotion_service.cpp
 
-# All source files
 SOURCES = $(SOURCES_CORE) $(SOURCES_GUI)
 
 # Object files

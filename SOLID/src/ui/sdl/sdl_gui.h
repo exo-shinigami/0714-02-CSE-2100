@@ -12,9 +12,9 @@
 #define GUI_H
 
 #include "types_definitions.h"
-#include "game_timer.h"
-#include "move_history_tracker.h"
-#include "gui_input_handler.h"
+#include "state/game_timer.h"
+#include "state/move_history_tracker.h"
+#include "input/gui_input_handler.h"
 #include <SDL2/SDL.h>
 
 class IEngineMovePolicy;

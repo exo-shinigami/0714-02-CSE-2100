@@ -5,7 +5,7 @@
 
 #include "engine_move_policy.h"
 
-#include "sdl_gui.h"
+#include "../sdl_gui.h"
 
 #include <cstdio>
 

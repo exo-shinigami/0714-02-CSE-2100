@@ -7,9 +7,40 @@ Course Code: 0714 02 CSE 2100 || Course Title : Advanced Programming Laboratory
 **Course:** Advanced Programming Lab (2nd Year CSE)  
 **Project:** Gambit Chess Engine   
 
----
+## Folder Structure (Key Areas)
 
-## 1. Executive Overview
+```
+SOLID/
+	src/
+		core/
+			attack/
+			bitboards/
+			board/
+			moves/
+			types/
+		engine/
+			evaluation/
+			hashtable/
+			search/
+		main/
+		openingbook/
+		ui/
+			protocols/
+			sdl/
+				controller/
+				input/
+				platform/
+				services/
+				state/
+		utils/
+	build/
+	docs/
+	lib/
+	scripts/
+```
+
+
+## Executive Overview
 
 This report presents a structured transition plan from legacy C-style implementation to modern C++ architecture for the Gambit Chess Engine, with explicit focus on:
 
@@ -22,7 +53,7 @@ The goal is not only to modernize syntax, but to redesign responsibility boundar
 
 ---
 
-## 2. Why Transition from C to C++
+## Why Transition from C to C++
 
 The transition is justified by both engineering and academic value.
 
@@ -42,7 +73,7 @@ The transition is justified by both engineering and academic value.
 
 ---
 
-## 3. Transition Objectives
+## Transition Objectives
 
 ### Primary objectives
 
@@ -62,7 +93,7 @@ The transition is justified by both engineering and academic value.
 
 ---
 
-## 4. Target OOD Architecture
+## Target OOD Architecture
 
 ### Layered model
 
@@ -94,9 +125,149 @@ Dependencies flow downward only:
 
 No domain module depends on presentation concerns.
 
+### UML Diagrams (C to C++ Transition with SOLID)
+
+The diagrams below show the shift from a C-style, flat design to a C++ design with clear responsibilities and SOLID boundaries.
+
+#### Diagram 1: Before (C-style, procedural)
+
+```mermaid
+classDiagram
+	class main_c {
+		+global_state
+		+functions()
+	}
+	class board_c {
+		+board_array
+		+rules()
+	}
+	class moves_c {
+		+generate()
+		+execute()
+	}
+	class search_c {
+		+search()
+		+evaluate()
+	}
+	class ui_c {
+		+input()
+		+render()
+		+protocols()
+	}
+
+	main_c --> board_c
+	main_c --> moves_c
+	main_c --> search_c
+	main_c --> ui_c
+	search_c --> board_c
+	ui_c --> board_c
+	ui_c --> moves_c
+```
+
+#### Diagram 2: After (C++ OOD with SOLID boundaries)
+
+```mermaid
+classDiagram
+	direction LR
+
+	class IBoardQuery {
+		<<interface>>
+		+getPiece()
+		+getSideToMove()
+	}
+	class IBoardModifier {
+		<<interface>>
+		+applyMove()
+		+undoMove()
+	}
+	class IEvaluator {
+		<<interface>>
+		+scorePosition()
+	}
+	class ISearchService {
+		<<interface>>
+		+findBestMove()
+	}
+	class IProtocol {
+		<<interface>>
+		+runLoop()
+	}
+	class IRenderer {
+		<<interface>>
+		+drawBoard()
+		+drawPieces()
+	}
+
+	class ChessBoard {
+		+state
+		+rules
+	}
+	class SearchEngine {
+		+search()
+	}
+	class StaticEvaluator {
+		+scorePosition()
+	}
+	class GameController {
+		+gameLoop()
+	}
+	class SDLRenderer {
+		+drawBoard()
+	}
+	class UCIProtocol {
+		+runLoop()
+	}
+	class XBoardProtocol {
+		+runLoop()
+	}
+
+	IBoardQuery <|.. ChessBoard
+	IBoardModifier <|.. ChessBoard
+	IEvaluator <|.. StaticEvaluator
+	ISearchService <|.. SearchEngine
+	IRenderer <|.. SDLRenderer
+	IProtocol <|.. UCIProtocol
+	IProtocol <|.. XBoardProtocol
+
+	SearchEngine --> IBoardQuery
+	SearchEngine --> IEvaluator
+	GameController --> ISearchService
+	GameController --> IBoardModifier
+	UCIProtocol --> ISearchService
+	SDLRenderer --> IBoardQuery
+```
+
+#### Diagram 3: SOLID flow (layered dependencies)
+
+```mermaid
+flowchart LR
+	P(Presentation Layer)
+    [SDL GUI, UCI, XBoard]
+        |
+        v 
+    S(Service Layer)
+    [GameController, SearchService]
+        |
+        v
+    D(Domain Layer)
+    [Board, Moves, Rules]
+        |
+        v
+    I(Infrastructure)
+    [Hash, Opening Book, Utils]
+
+	P -. depends on interfaces .-> S
+	S -. depends on interfaces .-> D
+```
+
+These diagrams highlight:
+1. The old C-style design mixed many jobs in the same place.
+2. The new C++ design splits responsibilities and uses interfaces (SRP, ISP, DIP).
+3. New features can be added without changing stable core classes (OCP).
+
 ---
 
-## 5. Core Class and Interface Design
+## Core Class and Interface Design
 
 ### Key classes (concrete)
 
@@ -121,9 +292,9 @@ This split is designed to enforce both ISP and DIP.
 
 ---
 
-## 6. SOLID Implementation Plan
+## SOLID Implementation Plan
 
-## 6.1 S: Single Responsibility Principle (SRP)
+## S: Single Responsibility Principle (SRP)
 
 ### Problem pattern
 Large files and large state objects mixing unrelated concerns.
@@ -143,7 +314,7 @@ Large files and large state objects mixing unrelated concerns.
 ### Expected result
 Each class has one clear reason to change.
 
-## 6.2 O: Open/Closed Principle (OCP)
+## O: Open/Closed Principle (OCP)
 
 ### Implementation
 1. Use interface-driven extension points for:
@@ -157,7 +328,7 @@ Each class has one clear reason to change.
 ### Expected result
 New features are added with minimal risk to existing modules.
 
-## 6.3 L: Liskov Substitution Principle (LSP)
+## L: Liskov Substitution Principle (LSP)
 
 ### Implementation
 1. Define strict behavioral contracts for every interface.
@@ -167,7 +338,7 @@ New features are added with minimal risk to existing modules.
 ### Expected result
 Any evaluator/search/protocol implementation can be swapped safely.
 
-## 6.4 I: Interface Segregation Principle (ISP)
+## I: Interface Segregation Principle (ISP)
 
 ### Implementation
 1. Split broad board API into small role-based interfaces:
@@ -180,7 +351,7 @@ Any evaluator/search/protocol implementation can be swapped safely.
 ### Expected result
 Reduced coupling and smaller compile-time dependency surface.
 
-## 6.5 D: Dependency Inversion Principle (DIP)
+## D: Dependency Inversion Principle (DIP)
 
 ### Implementation
 1. High-level modules depend on abstractions (`IEvaluator`, `ISearchService`, `IBoardQuery`).
@@ -192,7 +363,7 @@ Architecture becomes testable, replaceable, and stable under change.
 
 ---
 
-## 7. Design Patterns Used
+## Design Patterns Used
 
 1. **Strategy Pattern**
 - interchangeable evaluators and search policies
@@ -211,7 +382,7 @@ Architecture becomes testable, replaceable, and stable under change.
 
 ---
 
-## 8. Migration Roadmap (Phased)
+## Migration Roadmap (Phased)
 
 ## Phase 1: Baseline and Safety Net
 
@@ -259,7 +430,7 @@ Architecture becomes testable, replaceable, and stable under change.
 
 ---
 
-## 9. Risk Management
+## Risk Management
 
 ### Key risks
 
@@ -277,7 +448,7 @@ Architecture becomes testable, replaceable, and stable under change.
 
 ---
 
-## 10. Validation and Quality Gates
+## Validation and Quality Gates
 
 Transition is accepted only if all checks pass:
 
@@ -290,43 +461,156 @@ Transition is accepted only if all checks pass:
 
 ---
 
-## 11. **AI Prompt Set for Execution**
+## **AI Prompt Set for Execution**
 
 
 ## Prompt 1 - Migration Inventory
-"Analyze the chess engine and list where we still use old C-style code. For each file, suggest the C++ replacement in simple terms and explain the risk level. Give us a safe order to start, so we can begin with low-risk files first."
+"Find the files that still look like old C code. For each one, say how to update it to C++ in simple words. Also tell us which ones are safe to start with first."
+
+
+| File | C-style issue | C++ fix | Risk |
+|---|---|---|---|
+| src/core/types/types_definitions.h | macros and globals in header | move constants to `constexpr`/`enum class`, wrap globals in a namespace or service | Medium |
+| src/core/moves/moves_generation.cpp | macro-heavy free functions | convert macros to inline helpers and move logic into a `MoveGenerator` class | Medium |
+| src/core/board/board_representation.cpp | C-style free functions and stdio | move helpers into `ChessBoard`/`ValidationService`, use <cstdio> and methods | Medium |
+| src/utils/utils_init.cpp | global tables | wrap in `EngineBootstrapService` static members | Low |
 
 ## Prompt 2 - Baseline Lock
-"Create a clear baseline before we refactor anything. Include compile checks, perft checkpoints, and quick UCI/XBoard tests with expected output. This baseline will help us prove that behavior did not break after changes."
+"Before changing anything, make a baseline. Include build checks, perft tests, and quick UCI/XBoard tests with expected results. This helps us prove nothing broke later."
+
+
+| Check | Expected |
+|---|---|
+| Build | build/bin/gambit.exe created |
+| Perft (depth 3) | matches recorded baseline |
+| UCI smoke | engine responds to `uci`/`isready` |
+| XBoard smoke | engine accepts xboard/level/go |
 
 ## Prompt 3 - Interface Scaffold
-"Introduce core interfaces like IBoardQuery, IBoardModifier, IBoardSetup, IEvaluator, and ISearchService. Keep adapters so old code can still run while we migrate step by step. Do this with minimal behavior change so we stay stable."
+"Add core interfaces (IBoardQuery, IBoardModifier, IBoardSetup, IEvaluator, ISearchService). Keep adapters so old code still runs while we move step by step. Do not change behavior."
+
+
+```mermaid
+classDiagram
+	class IBoardQuery {
+		<<interface>>
+	}
+	class IBoardModifier {
+		<<interface>>
+	}
+	class IBoardSetup {
+		<<interface>>
+	}
+	class IEvaluator {
+		<<interface>>
+	}
+	class IProtocol {
+		<<interface>>
+	}
+
+	class ChessBoard
+	class StaticEvaluator
+	class UciProtocol
+	class XBoardProtocol
+
+	IBoardQuery <|.. ChessBoard
+	IBoardModifier <|.. ChessBoard
+	IBoardSetup <|.. ChessBoard
+	IEvaluator <|.. StaticEvaluator
+	IProtocol <|.. UciProtocol
+	IProtocol <|.. XBoardProtocol
+```
 
 ## Prompt 4 - Encapsulation Pass
-"Replace direct board field access with getter and setter methods in core modules. After each safe batch, make those fields private so outside code cannot change them directly. Keep this gradual and compile after every batch."
+"Replace direct board field access with getters and setters. After each safe batch, make fields private. Compile after every batch."
+
+
+```cpp
+// After (current style in ChessBoard)
+class ChessBoard {
+public:
+	int getSide() const { return side; }
+	void setSide(int value) { side = value; }
+private:
+	int side;
+};
+```
 
 ## Prompt 5 - SRP Decomposition
-"Find the three biggest files that are doing too many jobs. Split each file into smaller focused classes or components, where each one has one main responsibility. Keep behavior exactly the same while doing this split."
+"Find the three biggest files that do too many jobs. Split them into smaller parts so each one does only one job. Keep behavior the same."
+
+
+| Old file | New files | Responsibility |
+|---|---|---|
+| src/ui/sdl/sdl_gui.cpp | src/ui/sdl/input/gui_input_handler.cpp | input handling |
+| src/ui/sdl/sdl_gui.cpp | src/ui/sdl/state/game_timer.cpp | timer logic |
+| src/ui/sdl/sdl_gui.cpp | src/ui/sdl/state/move_history_tracker.cpp | move history |
+| src/ui/sdl/sdl_gui.cpp | src/ui/sdl/services/promotion_service.cpp | promotion logic |
 
 ## Prompt 6 - DIP Enforcement
-"Refactor protocol and GUI code so they talk to interfaces, not concrete engine internals. Remove direct calls to specific evaluation and search implementations. This will reduce coupling and make testing easier."
+"Refactor protocol and GUI code to use interfaces, not concrete engine classes. Remove direct calls to specific evaluators and search code. This makes testing easier."
+
+
+```mermaid
+flowchart LR
+	UCI[UciProtocol] --> IEval[IEvaluator]
+	XBoard[XBoardProtocol] --> IEval
+```
 
 ## Prompt 7 - RAII and Ownership
-"Replace manual memory handling with RAII-based C++ structures. Use safe ownership tools like standard containers and smart pointers where needed. Keep object lifetime behavior the same as before."
+"Replace manual memory handling with RAII. Use standard containers and smart pointers where needed. Keep lifetimes the same."
+
+
+```cpp
+// RAII in HashTable
+class HashTable {
+	std::vector<HashEntry> table_;
+public:
+	HashTable() = default;
+	~HashTable() = default;
+};
+```
 
 ## Prompt 8 - Regression Gate
-"After every refactor batch, run compile checks, perft checks, and protocol checks. Compare results with the baseline and show pass or fail clearly. If there is any difference, point to the exact place where it changed."
+"After each refactor batch, run build checks, perft, and protocol tests. Compare with the baseline and show pass/fail. If anything changed, point to where."
+
+
+| Test | Must match |
+|---|---|
+| Build | same output binary and no new warnings |
+| Perft (depth 3) | node counts and totals |
+| UCI smoke | identical ready/uciok responses |
 
 ## Prompt 9 - Performance Gate
-"Benchmark engine speed before and after refactoring. Measure search throughput and depth-time behavior using the same settings. Flag any slowdown above the accepted threshold and report where it appears."
+"Measure engine speed before and after refactoring using the same settings. Flag any slowdown above the limit and say where it happens."
+
+
+| Metric | Target |
+|---|---|
+| Nodes per second | after >= before |
 
 ## Prompt 10 - Final SOLID Audit
-"Run a final code audit focused on SOLID quality. Rank issues by severity and explain each issue in simple words. For every remaining violation, suggest a concrete and practical fix."
+"Do a final SOLID check. List issues by severity and explain them in simple words. For each issue, suggest a practical fix."
+
+
+| Severity | Issue | Fix |
+|---|---|---|
+| High | Large header with macros and globals in types_definitions.h | move to `constexpr` and encapsulated services |
+| Medium | C-style move generator with macros in moves_generation.cpp | refactor into a `MoveGenerator` class |
+| Low | Global tables in utils_init.cpp | wrap as static members in `EngineBootstrapService` |
 
 
 
 ## Conclusion
 
-This transition plan establishes a disciplined path from legacy C-style code to modern C++ architecture with OOD and SOLID at the center. The design balances correctness, maintainability, and extensibility through incremental refactoring, strict validation gates, and interface-driven boundaries.
+This transition plan defines a structured path from legacy procedural code to modern object-oriented C++ architecture using SOLID principles.
 
-The final outcome is a chess engine architecture suitable for both academic evaluation and long-term engineering evolution.
+The final result is expected to be:
+
+- Maintainable
+- Extensible
+- Testable
+- Academically demonstrative
+- Engineering-grade reliable
+
+This architecture supports long-term evolution while preserving functional correctness throughout the migration process.

@@ -16,7 +16,8 @@
 #include "move_history_tracker.h"
 #include "gui_input_handler.h"
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>  // Add explicit TTF include
+
+class IEngineMovePolicy;
 
 #define BOARD_SIZE 640
 #define SQUARE_SIZE 80
@@ -55,15 +56,37 @@
 #define MODE_PVE 0  // Player vs Engine
 #define MODE_PVP 1  // Player vs Player
 
+struct GUIRuntimeState {
+    int isRunning = 0;
+    int gameOver = 0;
+    char gameOverMessage[256] = {};
+    int gameMode = MODE_PVP;
+};
+
+struct GUISelectionState {
+    int selectedSquare = NO_SQ;
+    int possibleMoves[256] = {};
+    int possibleMovesCount = 0;
+};
+
+struct GUIPromotionState {
+    int pending = 0;
+    int fromSq = NO_SQ;
+    int toSq = NO_SQ;
+};
+
+struct GUICaptureState {
+    int white[16] = {};
+    int black[16] = {};
+    int whiteCount = 0;
+    int blackCount = 0;
+};
+
 struct GUI {
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_Texture* pieceTextures[13];
-    int selectedSquare;
-    int isRunning;
-    int gameOver;  // 0 = game active, 1 = game over
-    char gameOverMessage[256];  // Message to display when game is over (increased buffer size)
-    int gameMode;  // MODE_PVE or MODE_PVP
+    GUIRuntimeState runtime;
     
     // move history tracking
     char moveHistory[MAX_DISPLAY_MOVES][10];  // Store move strings like "e2e4"
@@ -84,19 +107,13 @@ struct GUI {
     GUIInputHandler inputHandler;
     
     // move highlighting
-    int possibleMoves[256];    // Array of possible move squares
-    int possibleMovesCount;    // Number of possible moves
+    GUISelectionState selection;
     
     // Pawn promotion
-    int promotionPending;      // 1 if waiting for promotion choice
-    int promotionFromSq;       // Source square for promotion
-    int promotionToSq;         // Target square for promotion
+    GUIPromotionState promotion;
 
     // Captured pieces (SRP: tracked here, not in ChessBoard)
-    int capturedWhite[16];
-    int capturedBlack[16];
-    int capturedWhiteCount;
-    int capturedBlackCount;
+    GUICaptureState captures;
 };
 
 // Function declarations
@@ -109,7 +126,8 @@ void renderTimers(GUI* gui, ChessBoard* board);
 void addMoveToHistory(GUI* gui, const char* moveStr);
 void updateTimer(GUI* gui, ChessBoard* board);
 void resetTimers(GUI* gui);
-void gUIHandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, int y, const IEvaluator& eval);
+void gUIHandleMouseClick(GUI* gui, ChessBoard* board, SearchInfo* info, int x, int y,
+                         const IEvaluator& eval, const IEngineMovePolicy& movePolicy);
 int squareFromCoords(int x, int y);
 void getSquareCoords(int square, int* x, int* y);
 void gUIDrawPiece(GUI* gui, int piece, int x, int y);

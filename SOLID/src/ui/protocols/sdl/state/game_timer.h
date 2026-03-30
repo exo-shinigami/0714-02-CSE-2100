@@ -13,6 +13,8 @@
 #ifndef GAME_TIMER_H
 #define GAME_TIMER_H
 
+#include <cstddef>
+
 /**
  * @class GameTimer
  * @brief Responsible only for managing chess clock timers

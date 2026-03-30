@@ -14,10 +14,9 @@
 #define GAME_CONTROLLER_H
 
 #include "types_definitions.h"
-#include "gui_renderer.h"
+#include "sdl_gui.h"
 #include "gui_input_handler.h"
-#include "game_timer.h"
-#include "move_history_tracker.h"
+#include "engine_move_policy.h"
 #include <SDL2/SDL.h>
 
 /**
@@ -61,49 +60,26 @@ private:
     ChessBoard* board_;
     SearchInfo* searchInfo_;
     const IEvaluator* evaluator_;
-    
-    // Components (following SRP)
-    gUIRenderer* renderer_;
-    GUIInputHandler* inputHandler_;
-    GameTimer* timer_;
-    MoveHistoryTracker* history_;
-    
-    // GUI internals
-    SDL_Window* window_;
-    SDL_Renderer* sdlRenderer_;
+    const IEngineMovePolicy* movePolicy_;
+    GUI gui_;
+    GUIInputHandler inputHandler_;
     
     // Game state
     GameMode gameMode_;
     GameState gameState_;
-    int selectedSquare_;
-    int possibleMoves_[256];
-    int possibleMovesCount_;
     bool isRunning_;
-    
-    // Captured pieces tracking
-    int capturedWhite_[16];
-    int capturedBlack_[16];
-    int capturedWhiteCount_;
-    int capturedBlackCount_;
-    
-    // Promotion handling
-    bool promotionPending_;
-    int promotionFromSq_;
-    int promotionToSq_;
     
     // Private helper methods
     void initializeGame();
+    void applyInputAction(const InputEvent& inputEvent);
+    void handleScrollEvent(int direction);
     void processSquareClick(int square);
-    void executeMove(int move);
-    void updateGameState();
-    void triggerAIMove();
-    bool isPlayerTurn() const;
-    void generatePossibleMoves();
-    void clearPossibleMoves();
-    void trackCapturedPiece(int capturedPiece);
+    void resetForNewGame();
+    void printHelp() const;
     
 public:
-    GameController(ChessBoard* board, SearchInfo* info, const IEvaluator& eval);
+    GameController(ChessBoard* board, SearchInfo* info, const IEvaluator& eval,
+                   const IEngineMovePolicy& movePolicy = defaultEngineMovePolicy());
     ~GameController();
     
     // Non-copyable

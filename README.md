@@ -1,4 +1,4 @@
-MVC Migration Report (May 2026)
+MVC Migration Report 
 
 Executive Summary
 - The codebase is now structured as strict Model-View-Controller.

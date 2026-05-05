@@ -90,3 +90,40 @@ Future Improvements (Optional)
 - Add observer callbacks on IModel to reduce polling.
 - Unify timer and history tracking between model and view.
 - Restore a dedicated console mode if needed.
+
+How This Project Satisfies MVC
+
+- **Model:** The authoritative game state and rules live behind the `IModel` interface. The `CoreModelAdapter` adapts the engine core to the `IModel` API so protocol handlers and controllers can use the same shared model instance.
+- **View:** The `IView` implementations (notably `SDLView`) handle rendering, input polling, and platform-specific resources. Views translate raw toolkit events into `InputEvent` objects and do not mutate model state directly.
+- **Controller:** `ControllerImpl` orchestrates game flow: it receives `InputEvent`s from the view, queries the model for legal moves, and instructs the model to apply moves or the view to update presentation/state.
+
+Mermaid diagram (visualizing the mapping):
+
+```mermaid
+graph LR
+	subgraph Model
+		CMA[CoreModelAdapter\n(src/mvc/adapters/CoreModelAdapter.cpp)]
+		EngineCore[Engine Core\n(src/core, src/engine)]
+	end
+	subgraph Controller
+		CI[ControllerImpl\n(src/mvc/controllers/ControllerImpl.cpp)]
+	end
+	subgraph View
+		SV[SDLView\n(src/mvc/views/SDLView.cpp)]
+	end
+	CI -->|calls| CMA
+	CI -->|updates| SV
+	SV -->|forwards input| CI
+	CMA -->|wraps| EngineCore
+```
+
+File mappings (where to look)
+
+- Model: `src/mvc/adapters/CoreModelAdapter.cpp`, `src/mvc/adapters/CoreModelAdapter.h`, plus engine and core folders under `src/core` and `src/engine` for rules and state.
+- Controller: `src/mvc/controllers/ControllerImpl.cpp`, `src/mvc/controllers/ControllerImpl.h`.
+- View: `src/mvc/views/SDLView.cpp`, `src/mvc/views/SDLView.h`, and UI SDL code under `src/ui/sdl/` for renderer and input handling.
+
+Notes
+
+- The Mermaid block above renders on GitHub and many Markdown viewers; if your renderer doesn't support Mermaid, generate the SVG with a Mermaid tool and embed it in this README.
+- If you'd like, I can also add a standalone SVG under `docs/` and link it here.

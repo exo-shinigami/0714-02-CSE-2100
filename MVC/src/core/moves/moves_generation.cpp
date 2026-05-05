@@ -497,6 +497,7 @@ void generateAllCaps(const ChessBoard *board, MoveList *list, const SearchInfo *
 					}
 					continue;
 				}
+				addQuietMove(board, MOVE(squareIndex, t_sq, EMPTY, EMPTY, 0), list, info);
 			}
 		}
 

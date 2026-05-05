@@ -233,6 +233,9 @@ public:
 
     // Add a new move with a score
     void push(int moveValue, int score = 0) {
+		if (count_ >= CHESS_MAX_POSITION_MOVES) {
+			return;
+		}
         moves_[count_] = move(moveValue, score);
         ++count_;
     }

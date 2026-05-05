@@ -9,11 +9,11 @@ Objectives
 - Enforce a toolkit-agnostic model interface.
 - Centralize input and game flow in a controller.
 - Keep rendering and platform dependencies inside the view layer.
-- Preserve protocol support (UCI, XBoard) on the same model API.
+- Ship a GUI-only product surface.
 
 Target Scope
 - Project root: SOLID
-- Modes covered: GUI, UCI, XBoard
+- Modes covered: GUI only
 
 Architecture Overview
 
@@ -40,28 +40,17 @@ Key Changes Completed
 - Input is translated into a toolkit-agnostic InputEvent before it reaches the controller.
 
 3) Model is shared across entry paths
-- GUI and protocol modes use the same CoreModelAdapter instance.
-- UCI and XBoard commands route through the model adapter API.
+- GUI uses the same CoreModelAdapter instance across the session.
 
 4) Legacy GUI flow removed
 - The old GUI game flow loop has been deleted.
 - Rendering and UI state now depend on controller-driven updates.
 
-Protocols
-
-UCI
-- Uses IProtocol::run(IModel&, ...).
-- Position setup, hash configuration, and UCI move parsing are routed through model adapter helpers.
-
-XBoard
-- Uses IProtocol::run(IModel&, ...).
-- XBoard commands (new, setboard, usermove) are handled via model adapter helpers.
-
 Initialization and Ownership
 
 Startup
 - initAll() runs once in main before CoreModelAdapter::initialize().
-- A single CoreModelAdapter instance is injected into GUI or protocol mode.
+- A single CoreModelAdapter instance is injected into the GUI controller.
 
 Runtime Roles
 - Controller: input handling and game flow.
@@ -70,16 +59,15 @@ Runtime Roles
 
 Build and Smoke Tests
 
-UCI smoke
-- Command: make -C SOLID test-mvc-smoke
-- Script: scripts/mvc_uci_smoke.sh
+GUI smoke
+- Command: make -C SOLID run
 
 Current Status
 
 Completed
 - MVC interfaces and adapters are in place.
 - GUI logic is decoupled from the model.
-- Protocol modes operate through the model adapter.
+- GUI-only runtime is the shipped path.
 
 Known Issue
 - GUI runtime currently crashes when processing a square-click event.

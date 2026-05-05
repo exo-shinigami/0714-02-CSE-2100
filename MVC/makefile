@@ -21,7 +21,7 @@ else ifneq (,$(findstring MINGW,$(UNAME_S)))
 else ifeq ($(OS),Windows_NT)
 	CXXFLAGS = -O2 -Wall -std=c++17 -Isrc/core/types -DENABLE_GUI
 	CXXFLAGS_GUI = -O2 -Wall -std=c++17 -Isrc/core/types -Isrc/ui/sdl -DENABLE_GUI
-	LDFLAGS_GUI = -static -mwindows -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lfreetype -lws2_32 -lwinmm -lm -lpthread
+	LDFLAGS_GUI = -static -mwindows -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lfreetype -lharfbuzz -lglib-2.0 -lintl -lws2_32 -lole32 -lwinmm -lshlwapi -luuid -latomic -lpcre2-8 -lgraphite2 -lbrotlidec -lbrotlicommon -lbz2 -lpng16 -lz -lusp10 -lgdi32 -lrpcrt4 -luser32 -ldwrite -lm -lkernel32 -limm32 -loleaut32 -lversion -ladvapi32 -lsetupapi -lshell32 -ldinput8 -lpthread
 	TARGET_SUFFIX = .exe
 else
 	# Fallback to Linux-like settings
@@ -51,7 +51,7 @@ BUILD_DIR = build
 OBJ_DIR = $(BUILD_DIR)/obj
 BIN_DIR = $(BUILD_DIR)/bin
 
-# Source files (core engine only, no GUI)
+# Source files (core engine + GUI)
 SOURCES_CORE = \
 	$(SRC_MAIN)/main_entry.cpp \
 	$(SRC_CORE_TYPES)/types_data.cpp \
@@ -68,8 +68,6 @@ SOURCES_CORE = \
 	$(SRC_ENGINE_SEARCH)/search_perft.cpp \
 	$(SRC_ENGINE_EVAL)/evaluation_static.cpp \
 	$(SRC_ENGINE_HASH)/hashtable_pv.cpp \
-	$(SRC_UI_PROTOCOLS)/protocols_uci.cpp \
-	$(SRC_UI_PROTOCOLS)/protocols_xboard.cpp \
 	$(SRC_UTILS)/utils_misc.cpp \
 	$(SRC_UTILS)/utils_init.cpp \
 	$(SRC_OPENINGBOOK)/openingbook_poly.cpp \
@@ -102,6 +100,9 @@ TARGET = $(BIN_DIR)/gambit.exe
 all: directories $(TARGET)
 	@cp $(TARGET) gambit.exe
 	@echo "Build complete! Double-click gambit.exe to play"
+
+# Backward-compatible alias for older scripts and docs
+gui: all
 
 # Create necessary directories
 directories:
@@ -155,10 +156,10 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  make all      - Build GUI version with SDL2 (default)"
+	@echo "  make gui      - Alias for make all"
 	@echo "  make clean    - Remove all build artifacts"
 	@echo "  make rebuild  - Clean and build from scratch"
 	@echo "  make run      - Build and run the game"
-	@echo "  make test-mvc-smoke - Build and run minimal UCI pipe smoke test"
 	@echo "  make help     - Display this help message"
 	@echo ""
 	@echo "Folder Structure:"
@@ -171,11 +172,5 @@ help:
 	@echo ""
 	@echo "Command Line Usage:"
 	@echo "  gambit        - Launch GUI mode (default)"
-	@echo "  gambit uci    - Launch UCI protocol mode"
-	@echo "  gambit xboard - Launch XBoard protocol mode"
 
-.PHONY: all directories clean rebuild run help test-mvc-smoke
-
-# Non-interactive UCI smoke (requires bash, timeout)
-test-mvc-smoke:
-	@bash scripts/mvc_uci_smoke.sh
+.PHONY: all gui directories clean rebuild run help

@@ -22,7 +22,7 @@ REM Rebuild executable using makefile
 echo.
 echo Rebuilding using makefile...
 cd ..
-make gui
+make all
 
 if %ERRORLEVEL% EQU 0 (
     echo.

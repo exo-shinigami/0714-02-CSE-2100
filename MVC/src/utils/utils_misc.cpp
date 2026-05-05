@@ -16,6 +16,7 @@
 
 #include "stdio.h"
 #include "types_definitions.h"
+#include "string.h"
 
 #ifdef _WIN32
 #include "windows.h"
@@ -24,12 +25,11 @@
 #include "sys/time.h"
 #include "sys/select.h"
 #include "unistd.h"
-#include "string.h"
 #endif
 
 int RuntimeIOService::getTimeMs() {
 #ifdef _WIN32
-  return getTickCount();
+  return static_cast<int>(GetTickCount());
 #else
   struct timeval t;
   gettimeofday(&t, NULL);

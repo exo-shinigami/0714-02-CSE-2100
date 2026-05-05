@@ -28,7 +28,7 @@ unzip -j SDL2_ttf-32bit.zip "SDL2_ttf-${SDL2_TTF_VERSION}/i686-w64-mingw32/bin/*
 # Rebuild using makefile
 echo "Rebuilding using makefile..."
 cd ..
-make gui
+make all
 
 # Verify architecture matches
 echo ""

@@ -43,16 +43,14 @@ SOLID/
 	scripts/
 ```
 
-## Run modes and MVC boundary
+## Run mode and MVC boundary
 
 After `make -C SOLID`, the executable is `SOLID/build/bin/gambit.exe` (also copied to `SOLID/gambit.exe`).
 
 - **Default (no extra args)** — SDL GUI. The app wires `CoreModelAdapter` (`IModel`), `SDLView` (`IView`), and `ControllerImpl` (`IController`); gameplay moves go through `IModel::applyMove`.
-- **`gambit uci`** — UCI protocol over stdin/stdout. Position setup uses `IModel::applyUciPositionLine`; hash resizing uses `IModel::configureHashMegabytes`; search runs on `model.getBoard()` as today.
-- **`gambit xboard`** — XBoard protocol hooks use the same `IModel` for `new`, `setboard`, `usermove`, and `memory`. Pure rendering and layout stay in `src/ui/sdl/sdl_gui.*`; interactive game flow lives in `src/ui/sdl/gui_game_flow.*`.
-- **`NoBook`** — disables the opening book (unchanged).
+- **`NoBook`** — disables the opening book.
 
-**Integration smoke:** from `SOLID/`, run `make test-mvc-smoke` to pipe a minimal UCI session and verify the engine responds (`readyok`).
+**Integration smoke:** launch `gambit.exe` and verify the GUI reaches the board, accepts clicks, and completes a full move cycle.
 
 
 

@@ -105,20 +105,23 @@ Mermaid diagram (visualizing the mapping):
 
 ```mermaid
 graph LR
-	subgraph Model
-		CMA[CoreModelAdapter\n(src/mvc/adapters/CoreModelAdapter.cpp)]
-		EngineCore[Engine Core\n(src/core, src/engine)]
-	end
-	subgraph Controller
-		CI[ControllerImpl\n(src/mvc/controllers/ControllerImpl.cpp)]
-	end
-	subgraph View
-		SV[SDLView\n(src/mvc/views/SDLView.cpp)]
-	end
-	CI -->|calls| CMA
-	CI -->|updates| SV
-	SV -->|forwards input| CI
-	CMA -->|wraps| EngineCore
+    subgraph Model
+        CMA[CoreModelAdapter<br/>(src/mvc/adapters)]
+        EngineCore[Engine Core<br/>(src/core, src/engine)]
+    end
+
+    subgraph Controller
+        CI[ControllerImpl<br/>(src/mvc/controllers)]
+    end
+
+    subgraph View
+        SV[SDLView<br/>(src/mvc/views)]
+    end
+
+    SV -->|InputEvent| CI
+    CI -->|calls| CMA
+    CI -->|updates UI| SV
+    CMA -->|wraps| EngineCore
 ```
 
 File mappings (where to look)
